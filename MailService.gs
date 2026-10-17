@@ -15,13 +15,14 @@ function envoyerNotificationsProprietaires() {
   }
 
   const config = lireConfiguration();
-  const plage = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, 9);
+  const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
+  const plage = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, nbColonnes);
   const lignes = plage.getValues();
   const parProprietaire = new Map();
 
   lignes.forEach((ligne, index) => {
-    const statut = String(ligne[7] ?? '').trim();
-    const proprietaire = String(ligne[5] ?? '').trim();
+    const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
+    const proprietaire = String(ligne[COLONNES_INVENTAIRE.PROPRIETAIRE] ?? '').trim();
     if (statut === STATUTS_FICHIER.DORMANT && proprietaire.includes('@')) {
       if (!parProprietaire.has(proprietaire)) {
         parProprietaire.set(proprietaire, []);
@@ -41,16 +42,19 @@ function envoyerNotificationsProprietaires() {
 
   parProprietaire.forEach((elements, email) => {
     if (quotaRestant <= 1) {
-      console.warn('Quota d\'envoi de mails presque épuisé, arrêt des envois.');
+      console.warn('Quota d\'envoi d\'e-mails presque épuisé, arrêt des envois.');
       return;
     }
 
-    const totalMo = elements.reduce((acc, el) => acc + (Number(el.donnees[3]) || 0), 0);
+    const totalMo = elements.reduce((acc, el) => acc + (Number(el.donnees[COLONNES_INVENTAIRE.TAILLE_MO]) || 0), 0);
     const totalGo = (totalMo / 1024).toFixed(2);
     const totalCo2 = ((totalMo / 1024) * config.FACTEUR_CO2_KG_PAR_GO_AN * 1000).toFixed(0);
 
     const lignesHtml = elements.slice(0, 15).map((el) => {
-      const [, nom, , tailleMo, dateAct, , url] = el.donnees;
+      const nom = el.donnees[COLONNES_INVENTAIRE.NOM];
+      const tailleMo = el.donnees[COLONNES_INVENTAIRE.TAILLE_MO];
+      const dateAct = el.donnees[COLONNES_INVENTAIRE.DERNIERE_ACTIVITE];
+      const url = el.donnees[COLONNES_INVENTAIRE.URL];
       const dateFormatee = formaterDateFr_(dateAct);
       return `<tr>
         <td style="padding:8px;border-bottom:1px solid #eee;"><a href="${url}" style="color:#1a73e8;text-decoration:none;">${echapperHtml_(String(nom))}</a></td>
@@ -81,18 +85,22 @@ function envoyerNotificationsProprietaires() {
       </div>
     `;
 
-    MailApp.sendEmail({
-      to: email,
-      subject: `🌱 [Sobriété Numérique] ${elements.length} fichier(s) en sommeil (${totalMo.toFixed(1)} Mo)`,
-      htmlBody: corpsHtml
-    });
+    try {
+      MailApp.sendEmail({
+        to: email,
+        subject: `🌱 [Sobriété Numérique] ${elements.length} fichier(s) en sommeil (${totalMo.toFixed(1)} Mo)`,
+        htmlBody: corpsHtml
+      });
 
-    elements.forEach((el) => {
-      lignes[el.indexLigne][7] = STATUTS_FICHIER.NOTIFIE;
-    });
+      elements.forEach((el) => {
+        lignes[el.indexLigne][COLONNES_INVENTAIRE.STATUT] = STATUTS_FICHIER.NOTIFIE;
+      });
 
-    quotaRestant--;
-    emailsEnvoyes++;
+      quotaRestant--;
+      emailsEnvoyes++;
+    } catch (erreurEnvoi) {
+      console.warn(`Échec de l'envoi d'e-mail à ${email} :`, erreurEnvoi.message);
+    }
   });
 
   if (emailsEnvoyes > 0) {
@@ -108,15 +116,15 @@ function envoyerNotificationsProprietaires() {
  */
 function echapperHtml_(texte) {
   return String(texte ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, () => '&amp;')
+    .replace(/</g, () => '&lt;')
+    .replace(/>/g, () => '&gt;')
+    .replace(/"/g, () => '&quot;')
+    .replace(/'/g, () => '&#39;');
 }
 
 /**
- * Formate une date (objet Date de Google Sheets ou chaîne ISO YYYY-MM-DD) au format français JJ/MM/AAAA.
+ * Formate une date (objet Date de Google Sheets, format JJ/MM/AAAA ou chaîne ISO YYYY-MM-DD) en JJ/MM/AAAA.
  * @param {Date|string|*} valeurDate Valeur issue de la feuille Google Sheets.
  * @returns {string} Date formatée en JJ/MM/AAAA (ex. 15/01/2024).
  */
@@ -127,6 +135,9 @@ function formaterDateFr_(valeurDate) {
     return Utilities.formatDate(valeurDate, fuseau, 'dd/MM/yyyy');
   }
   const chaine = String(valeurDate).trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(chaine)) {
+    return chaine;
+  }
   const correspondanceIso = chaine.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (correspondanceIso) {
     return `${correspondanceIso[3]}/${correspondanceIso[2]}/${correspondanceIso[1]}`;

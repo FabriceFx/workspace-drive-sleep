@@ -2,105 +2,566 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Drive Sleep & Green FinOps</title>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #188038;
-      --primary-hover: #137333;
-      --blue: #1a73e8;
-      --surface: #ffffff;
-      --bg: #f8f9fa;
-      --border: #dadce0;
-      --text: #202124;
-      --muted: #5f6368;
+      --md-sys-color-primary: #137333;
+      --md-sys-color-on-primary: #ffffff;
+      --md-sys-color-primary-container: #c4eed0;
+      --md-sys-color-on-primary-container: #072711;
+      --md-sys-color-secondary: #0b57d0;
+      --md-sys-color-secondary-container: #d3e3fd;
+      --md-sys-color-error: #ba1a1a;
+      --md-sys-color-error-container: #ffdad6;
+      --md-sys-color-on-error-container: #410002;
+      --md-sys-color-surface: #ffffff;
+      --md-sys-color-surface-container: #f0f4f9;
+      --md-sys-color-surface-container-high: #e9eef6;
+      --md-sys-color-on-surface: #1f1f1f;
+      --md-sys-color-on-surface-variant: #444746;
+      --md-sys-color-outline: #747775;
+      --md-sys-color-outline-variant: #c4c7c5;
+      --md-sys-shape-corner-small: 8px;
+      --md-sys-shape-corner-medium: 12px;
+      --md-sys-shape-corner-large: 16px;
+      --md-sys-shape-corner-full: 9999px;
+      --md-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
+      --md-elevation-2: 0px 2px 6px 2px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
     }
+
     * { box-sizing: border-box; }
+
     body {
-      font-family: 'Roboto', Arial, sans-serif;
-      background-color: var(--bg);
-      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: var(--md-sys-color-surface-container);
+      color: var(--md-sys-color-on-surface);
       margin: 0;
       padding: 16px;
       font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
-    .container { max-width: 820px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    .header h1 { font-size: 18px; color: var(--primary); margin: 0; }
-    .lang-switch {
-      border: 1px solid var(--border);
-      background: var(--surface);
-      border-radius: 16px;
-      padding: 4px 10px;
-      cursor: pointer;
-      font-weight: 500;
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* En-tête */
+    .header-card {
+      background: var(--md-sys-color-surface);
+      padding: 16px 20px;
+      border-radius: var(--md-sys-shape-corner-large);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    .title-group h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--md-sys-color-primary);
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .title-group p {
+      margin: 4px 0 0 0;
       font-size: 12px;
+      color: var(--md-sys-color-on-surface-variant);
     }
-    .subtitle { color: var(--muted); margin-top: 0; margin-bottom: 16px; line-height: 1.4; }
-    .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
-    .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
-    .kpi-val { font-size: 16px; font-weight: 700; color: var(--primary); display: block; }
-    .kpi-label { font-size: 11px; color: var(--muted); }
-    .actions-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-    button { border: none; border-radius: 4px; padding: 8px 12px; font-size: 12px; font-weight: 500; cursor: pointer; }
-    .btn-primary { background: var(--primary); color: #fff; }
-    .btn-primary:hover { background: var(--primary-hover); }
-    .btn-secondary { background: #e8f0fe; color: var(--blue); }
-    .btn-outline { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
-    .file-list { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; max-height: 420px; overflow-y: auto; }
-    .file-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #f1f3f4; }
-    .file-item:last-child { border-bottom: none; }
-    .file-info { flex: 1; min-width: 0; }
-    .file-name { font-weight: 500; color: var(--blue); text-decoration: none; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .file-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
-    .status-msg { margin-top: 12px; padding: 10px; border-radius: 6px; background: #e6f4ea; color: var(--primary); display: none; }
+
+    .lang-chip {
+      background: var(--md-sys-color-surface-container);
+      color: var(--md-sys-color-on-surface);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: var(--md-sys-shape-corner-full);
+      padding: 6px 14px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    .lang-chip:hover {
+      background: var(--md-sys-color-surface-container-high);
+      border-color: var(--md-sys-color-outline);
+    }
+
+    /* Grille KPI */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .kpi-card {
+      background: var(--md-sys-color-surface);
+      border-radius: var(--md-sys-shape-corner-medium);
+      padding: 14px 16px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    .kpi-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .kpi-icon {
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .kpi-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--md-sys-color-on-surface-variant);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .kpi-val {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--md-sys-color-primary);
+      display: block;
+      margin-top: 2px;
+    }
+
+    .kpi-sub {
+      font-size: 11px;
+      color: var(--md-sys-color-on-surface-variant);
+      margin-top: 2px;
+    }
+
+    /* Barre d'outils et de recherche */
+    .toolbar-card {
+      background: var(--md-sys-color-surface);
+      border-radius: var(--md-sys-shape-corner-medium);
+      padding: 12px 16px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn {
+      font-family: 'Outfit', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 14px;
+      border-radius: var(--md-sys-shape-corner-full);
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      box-shadow: none !important;
+      transform: none !important;
+    }
+
+    .btn-tonal {
+      background: var(--md-sys-color-surface-container);
+      color: var(--md-sys-color-on-surface);
+      border: 1px solid var(--md-sys-color-outline-variant);
+    }
+
+    .btn-tonal:not(:disabled):hover {
+      background: var(--md-sys-color-surface-container-high);
+      border-color: var(--md-sys-color-outline);
+    }
+
+    .btn-danger {
+      background: var(--md-sys-color-error);
+      color: #ffffff;
+    }
+
+    .btn-danger:not(:disabled):hover {
+      background: #9a1313;
+      box-shadow: 0 2px 6px rgba(186, 26, 26, 0.3);
+    }
+
+    .btn-secondary {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-secondary);
+    }
+
+    .btn-secondary:not(:disabled):hover {
+      background: #c3d9fc;
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      min-width: 180px;
+      max-width: 260px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 7px 12px 7px 28px;
+      border-radius: var(--md-sys-shape-corner-full);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface-container);
+      font-size: 12px;
+      color: var(--md-sys-color-on-surface);
+      outline: none;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .search-input:focus {
+      border-color: var(--md-sys-color-primary);
+      background: var(--md-sys-color-surface);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      color: var(--md-sys-color-outline);
+      pointer-events: none;
+    }
+
+    /* Liste des fichiers */
+    .list-card {
+      background: var(--md-sys-color-surface);
+      border-radius: var(--md-sys-shape-corner-large);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      overflow: hidden;
+      max-height: 440px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .list-scroll {
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .file-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--md-sys-color-surface-container);
+      transition: background 0.15s ease;
+    }
+
+    .file-row:hover {
+      background: var(--md-sys-color-surface-container);
+    }
+
+    .file-row:last-child {
+      border-bottom: none;
+    }
+
+    /* Checkbox custom MD3 */
+    .cb-wrap {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .cb-wrap input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--md-sys-color-primary);
+      cursor: pointer;
+    }
+
+    .file-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .file-link {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 500;
+      font-size: 13px;
+      color: var(--md-sys-color-secondary);
+      text-decoration: none;
+      display: block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-link:hover {
+      text-decoration: underline;
+    }
+
+    .file-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      background: var(--md-sys-color-surface-container);
+      padding: 2px 8px;
+      border-radius: var(--md-sys-shape-corner-full);
+      font-size: 10.5px;
+    }
+
+    /* Skeleton Loading */
+    .skeleton-wrap {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .skeleton-line {
+      height: 20px;
+      background: linear-gradient(90deg, #f0f0f0 25%, #e6e6e6 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+    }
+
+    .skeleton-line.short { width: 40%; }
+    .skeleton-line.medium { width: 70%; }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Snackbar notification */
+    .toast-banner {
+      padding: 10px 16px;
+      border-radius: var(--md-sys-shape-corner-medium);
+      font-size: 12px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .toast-success {
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      border: 1px solid rgba(19, 115, 51, 0.2);
+    }
+
+    .toast-error {
+      background: var(--md-sys-color-error-container);
+      color: var(--md-sys-color-on-error-container);
+      border: 1px solid rgba(186, 26, 26, 0.2);
+    }
+
+    /* Dialog modal MD3 */
+    dialog {
+      border: none;
+      border-radius: var(--md-sys-shape-corner-large);
+      padding: 24px;
+      max-width: 440px;
+      width: 90%;
+      background: var(--md-sys-color-surface);
+      color: var(--md-sys-color-on-surface);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(2px);
+    }
+
+    .dialog-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--md-sys-color-error);
+      margin-top: 0;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dialog-body {
+      font-size: 13px;
+      color: var(--md-sys-color-on-surface-variant);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Responsive mobile / sidebar */
+    @media (max-width: 520px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+      .search-box { max-width: 100%; }
+      .header-card { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .toolbar-card { flex-direction: column; align-items: stretch; }
+      .action-buttons { justify-content: stretch; }
+      .action-buttons .btn { flex: 1; justify-content: center; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <h1 id="titreConsole">🌱 Console de sobriété numérique</h1>
-      <button class="lang-switch" id="btnLangue" onclick="basculerLangue()">FR / EN</button>
+    <!-- En-tête -->
+    <div class="header-card">
+      <div class="title-group">
+        <h1 id="titreConsole">🌱 Console de sobriété numérique</h1>
+        <p id="sousTitreConsole"></p>
+      </div>
+      <button class="lang-chip" id="btnLangue" onclick="basculerLangue()">FR / EN</button>
     </div>
-    <p class="subtitle" id="sousTitreConsole"></p>
 
+    <!-- Grille KPI Réactive -->
     <div class="kpi-grid">
       <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label" id="lblFichiers">Fichiers dormants</span>
+          <span class="kpi-icon">📁</span>
+        </div>
         <span class="kpi-val" id="valFichiers">0</span>
-        <span class="kpi-label" id="lblFichiers">Fichiers</span>
+        <div class="kpi-sub" id="subFichiers">0 sélectionnés</div>
       </div>
       <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label" id="lblVolume">Volume sélectionné</span>
+          <span class="kpi-icon">💾</span>
+        </div>
         <span class="kpi-val" id="valVolume">0 Mo</span>
-        <span class="kpi-label" id="lblVolume">Volume</span>
+        <div class="kpi-sub" id="subVolume">sur un total de 0 Mo</div>
       </div>
       <div class="kpi-card">
-        <span class="kpi-val" id="valCarbone">0 g</span>
-        <span class="kpi-label" id="lblCarbone">CO2e / an</span>
+        <div class="kpi-header">
+          <span class="kpi-label" id="lblCarbone">Impact carbone</span>
+          <span class="kpi-icon">🌍</span>
+        </div>
+        <span class="kpi-val" id="valCarbone">0 gCO2e</span>
+        <div class="kpi-sub" id="subCarbone">par an économisés</div>
       </div>
     </div>
 
-    <div class="actions-bar">
-      <button class="btn-outline" id="btnTout" onclick="toutSelectionner()"></button>
-      <button class="btn-primary" id="btnCorbeille" onclick="executerAction('CORBEILLE')"></button>
-      <button class="btn-secondary" id="btnListeBlanche" onclick="executerAction('LISTE_BLANCHE')"></button>
+    <!-- Barre d'outils et recherche -->
+    <div class="toolbar-card">
+      <div class="action-buttons">
+        <button class="btn btn-tonal" id="btnTout" onclick="toutSelectionner()">
+          <span>☑️</span><span id="txtBtnTout">Tout cocher</span>
+        </button>
+        <button class="btn btn-danger" id="btnCorbeille" onclick="demanderConfirmationCorbeille()">
+          <span>🗑️</span><span id="txtBtnCorbeille">Mettre à la corbeille</span>
+        </button>
+        <button class="btn btn-secondary" id="btnListeBlanche" onclick="executerAction('LISTE_BLANCHE')">
+          <span>🛡️</span><span id="txtBtnListeBlanche">Conserver</span>
+        </button>
+      </div>
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="inputFiltre" class="search-input" placeholder="Filtrer par nom..." oninput="filtrerFichiers()">
+      </div>
     </div>
 
-    <div class="file-list" id="listeFichiers"></div>
-    <div class="status-msg" id="messageStatut"></div>
+    <!-- Notification / Toast -->
+    <div class="toast-banner" id="messageStatut"></div>
+
+    <!-- Liste des fichiers -->
+    <div class="list-card">
+      <div class="list-scroll" id="listeFichiers">
+        <!-- Skeleton Loader initial -->
+        <div class="skeleton-wrap" id="skeletonLoader">
+          <div class="skeleton-line medium"></div>
+          <div class="skeleton-line short"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line medium"></div>
+          <div class="skeleton-line short"></div>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <!-- Dialogue modal natif MD3 pour confirmation destructive -->
+  <dialog id="modalConfirmation">
+    <div class="dialog-title">
+      <span>⚠️</span>
+      <span id="dialogTitre">Confirmation</span>
+    </div>
+    <div class="dialog-body" id="dialogMessage"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-tonal" id="btnDialogAnnuler" onclick="fermerModalConfirmation()">Annuler</button>
+      <button class="btn btn-danger" id="btnDialogConfirmer" onclick="confirmerCorbeille()">Oui, mettre à la corbeille</button>
+    </div>
+  </dialog>
 
   <script>
     let langueCourante = '<?= langueInitiale ?>' || 'fr';
     let etat = { fichiers: [], facteurCo2: 0.2, textes: null };
+    let ensembleSelection = new Set();
     let toutCoche = true;
+    let termeFiltre = '';
 
     function initialiser() {
       google.script.run
         .withSuccessHandler((reponse) => {
           etat = reponse;
+          ensembleSelection = new Set(etat.fichiers.map((f) => f.id));
+          document.getElementById('skeletonLoader').style.display = 'none';
           afficherInterface();
         })
         .withFailureHandler((err) => {
+          document.getElementById('skeletonLoader').style.display = 'none';
           afficherMessage(err.message, true);
         })
         .chargerDonneesConsole();
@@ -111,100 +572,230 @@
       afficherInterface();
     }
 
+    function obtenirTextes() {
+      if (!etat.textes) return null;
+      return etat.textes[langueCourante] || etat.textes.fr;
+    }
+
     function afficherInterface() {
-      if (!etat.textes) return;
-      const t = etat.textes[langueCourante];
+      const t = obtenirTextes();
+      if (!t) return;
+
+      const unite = t.uniteTaille || 'Mo';
+      const libelleInactif = t.inactifDepuis || 'Inactif depuis :';
+
       document.getElementById('titreConsole').textContent = '🌱 ' + t.titreConsole;
       document.getElementById('sousTitreConsole').textContent = t.sousTitreConsole;
       document.getElementById('lblFichiers').textContent = t.kpiFichiers;
       document.getElementById('lblVolume').textContent = t.kpiVolume;
       document.getElementById('lblCarbone').textContent = t.kpiCarbone;
-      document.getElementById('btnTout').textContent = t.btnToutSelectionner;
-      document.getElementById('btnCorbeille').textContent = '🗑️ ' + t.btnMettreCorbeille;
-      document.getElementById('btnListeBlanche').textContent = '🛡️ ' + t.btnListeBlanche;
+      document.getElementById('txtBtnTout').textContent = t.btnToutSelectionner;
+      document.getElementById('txtBtnCorbeille').textContent = t.btnMettreCorbeille;
+      document.getElementById('txtBtnListeBlanche').textContent = t.btnListeBlanche;
+      document.getElementById('btnLangue').textContent = langueCourante.toUpperCase() + ' ⇄ ' + (langueCourante === 'fr' ? 'EN' : 'FR');
 
+      recalculerKpi();
+      rendreListe();
+    }
+
+    function recalculerKpi() {
+      const t = obtenirTextes();
+      if (!t) return;
+      const unite = t.uniteTaille || 'Mo';
+
+      let totalMoGlobal = 0;
+      let totalMoSelectionne = 0;
+
+      etat.fichiers.forEach((f) => {
+        const mo = Number(f.tailleMo) || 0;
+        totalMoGlobal += mo;
+        if (ensembleSelection.has(f.id)) {
+          totalMoSelectionne += mo;
+        }
+      });
+
+      const nbSelectionnes = ensembleSelection.size;
+      const nbTotal = etat.fichiers.length;
+      const co2Grammes = Math.round((totalMoSelectionne / 1024) * etat.facteurCo2 * 1000);
+
+      document.getElementById('valFichiers').textContent = String(nbTotal);
+      document.getElementById('subFichiers').textContent = `${nbSelectionnes} ${t.kpiSelectionnes || 'sélectionné(s)'}`;
+
+      document.getElementById('valVolume').textContent = `${totalMoSelectionne.toFixed(1)} ${unite}`;
+      document.getElementById('subVolume').textContent = `sur un total de ${totalMoGlobal.toFixed(1)} ${unite}`;
+
+      document.getElementById('valCarbone').textContent = `${co2Grammes} gCO2e`;
+
+      const btnCorbeille = document.getElementById('btnCorbeille');
+      const btnListeBlanche = document.getElementById('btnListeBlanche');
+      btnCorbeille.disabled = nbSelectionnes === 0;
+      btnListeBlanche.disabled = nbSelectionnes === 0;
+    }
+
+    function filtrerFichiers() {
+      termeFiltre = (document.getElementById('inputFiltre').value || '').trim().toLowerCase();
+      rendreListe();
+    }
+
+    function rendreListe() {
+      const t = obtenirTextes();
       const conteneur = document.getElementById('listeFichiers');
       conteneur.textContent = '';
 
-      let totalMo = 0;
-      if (etat.fichiers.length === 0) {
-        const vide = document.createElement('div');
-        vide.style.padding = '20px';
-        vide.style.textAlign = 'center';
-        vide.textContent = t.aucunFichier;
-        conteneur.appendChild(vide);
-      } else {
-        etat.fichiers.forEach((f) => {
-          totalMo += Number(f.tailleMo) || 0;
-          const ligne = document.createElement('div');
-          ligne.className = 'file-item';
+      const fichiersFiltres = etat.fichiers.filter((f) => {
+        if (!termeFiltre) return true;
+        return (f.nom || '').toLowerCase().includes(termeFiltre);
+      });
 
-          const cb = document.createElement('input');
-          cb.type = 'checkbox';
-          cb.className = 'cb-fichier';
-          cb.value = f.id;
-          cb.checked = true;
-
-          const info = document.createElement('div');
-          info.className = 'file-info';
-
-          const lien = document.createElement('a');
-          lien.className = 'file-name';
-          lien.href = f.url;
-          lien.target = '_blank';
-          lien.textContent = f.nom;
-
-          const meta = document.createElement('div');
-          meta.className = 'file-meta';
-          meta.textContent = `${f.tailleMo} Mo • Inactif depuis : ${f.derniereActivite}`;
-
-          info.appendChild(lien);
-          info.appendChild(meta);
-          ligne.appendChild(cb);
-          ligne.appendChild(info);
-          conteneur.appendChild(ligne);
-        });
+      if (fichiersFiltres.length === 0) {
+        const messageVide = document.createElement('div');
+        messageVide.style.padding = '32px 16px';
+        messageVide.style.textAlign = 'center';
+        messageVide.style.color = 'var(--md-sys-color-on-surface-variant)';
+        messageVide.textContent = etat.fichiers.length === 0 ? t.aucunFichier : 'Aucun fichier ne correspond à votre filtre.';
+        conteneur.appendChild(messageVide);
+        return;
       }
 
-      const co2Grammes = Math.round((totalMo / 1024) * etat.facteurCo2 * 1000);
-      document.getElementById('valFichiers').textContent = String(etat.fichiers.length);
-      document.getElementById('valVolume').textContent = totalMo.toFixed(1) + ' Mo';
-      document.getElementById('valCarbone').textContent = co2Grammes + ' gCO2e';
+      const unite = t.uniteTaille || 'Mo';
+      const libelleInactif = t.inactifDepuis || 'Inactif depuis :';
+
+      fichiersFiltres.forEach((f) => {
+        const row = document.createElement('div');
+        row.className = 'file-row';
+
+        const cbWrap = document.createElement('label');
+        cbWrap.className = 'cb-wrap';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = f.id;
+        cb.checked = ensembleSelection.has(f.id);
+        cb.addEventListener('change', (e) => {
+          if (e.target.checked) {
+            ensembleSelection.add(f.id);
+          } else {
+            ensembleSelection.delete(f.id);
+          }
+          recalculerKpi();
+        });
+
+        cbWrap.appendChild(cb);
+
+        const details = document.createElement('div');
+        details.className = 'file-details';
+
+        const link = document.createElement('a');
+        link.className = 'file-link';
+        link.href = f.url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = f.nom || 'Sans titre';
+
+        const badges = document.createElement('div');
+        badges.className = 'file-badges';
+
+        const badgeTaille = document.createElement('span');
+        badgeTaille.className = 'badge';
+        badgeTaille.textContent = `💾 ${f.tailleMo} ${unite}`;
+
+        const badgeDate = document.createElement('span');
+        badgeDate.className = 'badge';
+        badgeDate.textContent = `🕒 ${libelleInactif} ${f.derniereActivite}`;
+
+        badges.appendChild(badgeTaille);
+        badges.appendChild(badgeDate);
+
+        details.appendChild(link);
+        details.appendChild(badges);
+
+        row.appendChild(cbWrap);
+        row.appendChild(details);
+        conteneur.appendChild(row);
+      });
     }
 
     function toutSelectionner() {
       toutCoche = !toutCoche;
-      document.querySelectorAll('.cb-fichier').forEach((cb) => { cb.checked = toutCoche; });
+      if (toutCoche) {
+        etat.fichiers.forEach((f) => ensembleSelection.add(f.id));
+      } else {
+        ensembleSelection.clear();
+      }
+      rendreListe();
+      recalculerKpi();
+    }
+
+    function demanderConfirmationCorbeille() {
+      const t = obtenirTextes();
+      const nb = ensembleSelection.size;
+      if (nb === 0) return;
+
+      const unite = t.uniteTaille || 'Mo';
+      let totalMo = 0;
+      etat.fichiers.forEach((f) => {
+        if (ensembleSelection.has(f.id)) {
+          totalMo += Number(f.tailleMo) || 0;
+        }
+      });
+
+      const messageTpl = t.messageModalCorbeille || 'Êtes-vous certain de vouloir déplacer les {nb} fichier(s) sélectionné(s) ({volume}) à la corbeille ?';
+      const message = messageTpl
+        .replace('{nb}', () => String(nb))
+        .replace('{volume}', () => `${totalMo.toFixed(1)} ${unite}`);
+
+      document.getElementById('dialogTitre').textContent = t.titreModalCorbeille || 'Confirmation';
+      document.getElementById('dialogMessage').textContent = message;
+      document.getElementById('btnDialogAnnuler').textContent = t.btnAnnuler || 'Annuler';
+      document.getElementById('btnDialogConfirmer').textContent = t.btnConfirmer || 'Oui, mettre à la corbeille';
+
+      document.getElementById('modalConfirmation').showModal();
+    }
+
+    function fermerModalConfirmation() {
+      document.getElementById('modalConfirmation').close();
+    }
+
+    function confirmerCorbeille() {
+      fermerModalConfirmation();
+      executerAction('CORBEILLE');
     }
 
     function executerAction(action) {
-      const ids = Array.from(document.querySelectorAll('.cb-fichier:checked')).map((cb) => cb.value);
+      const ids = Array.from(ensembleSelection);
       if (ids.length === 0) return;
-      document.getElementById('btnCorbeille').disabled = true;
-      document.getElementById('btnListeBlanche').disabled = true;
+
+      const t = obtenirTextes();
+      definirEtatBoutons(true);
+      afficherMessage(t.traitementEnCours || 'Traitement en cours…', false);
 
       google.script.run
         .withSuccessHandler((res) => {
+          definirEtatBoutons(false);
           const ensembleTraite = new Set(ids);
           etat.fichiers = etat.fichiers.filter((f) => !ensembleTraite.has(f.id));
-          document.getElementById('btnCorbeille').disabled = false;
-          document.getElementById('btnListeBlanche').disabled = false;
+          ensembleSelection.clear();
           afficherInterface();
-          afficherMessage(`${etat.textes[langueCourante].confirmationSucces} (${res.traites})`, false);
+          const msgSucces = `${t.confirmationSucces} (${res.traites} fichier(s))`;
+          afficherMessage(msgSucces, false);
         })
         .withFailureHandler((err) => {
-          document.getElementById('btnCorbeille').disabled = false;
-          document.getElementById('btnListeBlanche').disabled = false;
-          afficherMessage(err.message, true);
+          definirEtatBoutons(false);
+          afficherMessage((t.erreurServeur || 'Erreur : ') + ' ' + err.message, true);
         })
         .traiterDecisionsUtilisateur({ action, idsFichiers: ids });
     }
 
+    function definirEtatBoutons(desactive) {
+      document.getElementById('btnCorbeille').disabled = desactive;
+      document.getElementById('btnListeBlanche').disabled = desactive;
+      document.getElementById('btnTout').disabled = desactive;
+    }
+
     function afficherMessage(texte, estErreur) {
       const box = document.getElementById('messageStatut');
-      box.style.display = 'block';
-      box.style.background = estErreur ? '#fce8e6' : '#e6f4ea';
-      box.style.color = estErreur ? '#c5221f' : '#188038';
+      box.style.display = 'flex';
+      box.className = `toast-banner ${estErreur ? 'toast-error' : 'toast-success'}`;
       box.textContent = texte;
     }
 

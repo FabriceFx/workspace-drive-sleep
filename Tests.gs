@@ -9,7 +9,10 @@ function runAllTests() {
     test_CA02_filtrageFichierBinaireDormant,
     test_CA02_exclusionListeBlancheEtFichiersRecents,
     test_CA03_echappementHtmlSecurite,
-    test_CA04_calculKpiTableauDeBord
+    test_CA03_formatageDateMailFr,
+    test_CA04_calculKpiTableauDeBord,
+    test_CA05_constantesColonnes,
+    test_CA06_retryBackoff
   ];
 
   let reussis = 0;
@@ -70,6 +73,7 @@ function test_CA02_filtrageFichierBinaireDormant() {
   const resultat = evaluerEligibiliteFichier_(fauxFichier, config, dateLimite, idsExclus);
   affirmer_(resultat !== null, 'Le fichier binaire dormant de 20 Mo aurait dû être retenu.');
   affirmer_(resultat.tailleMo === 20, `Taille attendue 20 Mo, obtenue : ${resultat.tailleMo}`);
+  affirmer_(resultat.derniereActiviteIso === '01/02/2024', `Date attendue 01/02/2024, obtenue : ${resultat.derniereActiviteIso}`);
 }
 
 function test_CA02_exclusionListeBlancheEtFichiersRecents() {
@@ -102,8 +106,34 @@ function test_CA03_echappementHtmlSecurite() {
   affirmer_(!echappe.includes('<script>'), 'Les balises HTML doivent être échappées.');
 }
 
+function test_CA03_formatageDateMailFr() {
+  const objetDate = new Date(2024, 0, 15, 12, 0, 0); // 15 janvier 2024
+  affirmer_(formaterDateFr_(objetDate) === '15/01/2024', `Attendu 15/01/2024 pour Date, obtenu : ${formaterDateFr_(objetDate)}`);
+  affirmer_(formaterDateFr_('2024-01-15') === '15/01/2024', `Attendu 15/01/2024 pour chaîne ISO, obtenu : ${formaterDateFr_('2024-01-15')}`);
+  affirmer_(formaterDateFr_('15/01/2024') === '15/01/2024', `Attendu 15/01/2024 pour chaîne FR, obtenu : ${formaterDateFr_('15/01/2024')}`);
+}
+
 function test_CA04_calculKpiTableauDeBord() {
   const kpi = mettreAJourTableauDeBord();
   affirmer_(typeof kpi.goLiberes === 'number' && !Number.isNaN(kpi.goLiberes), 'Le KPI goLiberes doit être un nombre valide.');
   affirmer_(typeof kpi.co2EviteKg === 'number' && !Number.isNaN(kpi.co2EviteKg), 'Le KPI co2EviteKg doit être un nombre valide.');
+}
+
+function test_CA05_constantesColonnes() {
+  affirmer_(typeof COLONNES_INVENTAIRE.ID === 'number', 'COLONNES_INVENTAIRE.ID doit être défini');
+  affirmer_(typeof COLONNES_INVENTAIRE.STATUT === 'number', 'COLONNES_INVENTAIRE.STATUT doit être défini');
+  affirmer_(typeof COLONNES_LISTE_BLANCHE.MOTIF === 'number', 'COLONNES_LISTE_BLANCHE.MOTIF doit être défini');
+}
+
+function test_CA06_retryBackoff() {
+  let compteur = 0;
+  const resultat = executerAvecRetry_(() => {
+    compteur++;
+    if (compteur < 2) {
+      throw new Error('429 Too Many Requests (simulation test)');
+    }
+    return 'succes';
+  }, 3, 50);
+  affirmer_(resultat === 'succes', 'executerAvecRetry_ doit réussir après un retry simulé');
+  affirmer_(compteur === 2, `Deux tentatives attendues, obtenues : ${compteur}`);
 }

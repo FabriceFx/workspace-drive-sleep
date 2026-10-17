@@ -1,0 +1,24 @@
+# Credentials & Clasp config
+.clasp.json
+.clasprc.json
+.claspignore
+
+# Node & package managers
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# IDE & editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs & temp
+*.log
+scratch/

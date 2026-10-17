@@ -27,37 +27,60 @@ function onOpen(e) {
  * Action du menu : initialise l'environnement et affiche un toast.
  */
 function actionMenuInitialiser() {
-  initialiserEnvironnement();
-  SpreadsheetApp.getActiveSpreadsheet().toast('Les 4 feuilles sont prêtes / All 4 sheets are ready.', '🌱 Drive Sleep', 5);
+  try {
+    initialiserEnvironnement();
+    SpreadsheetApp.getActiveSpreadsheet().toast('Les 4 feuilles sont prêtes / All 4 sheets are ready.', '🌱 Drive Sleep', 5);
+  } catch (erreur) {
+    console.error('Erreur actionMenuInitialiser :', erreur);
+    SpreadsheetApp.getUi().alert('🌱 Erreur d\'initialisation', erreur.message, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
 }
 
 /**
  * Action du menu : lance l'audit Drive et affiche le résumé.
  */
 function actionMenuAudit() {
-  const resultat = lancerAuditDrive();
-  const message = `Scannés : ${resultat.fichiersScannes} | Nouveaux dormants : ${resultat.fichiersRetenus}`;
-  SpreadsheetApp.getActiveSpreadsheet().toast(message, '🌱 Audit Drive', 8);
+  try {
+    const resultat = lancerAuditDrive();
+    const message = `Scannés : ${resultat.fichiersScannes} | Nouveaux dormants : ${resultat.fichiersRetenus}`;
+    SpreadsheetApp.getActiveSpreadsheet().toast(message, '🌱 Audit Drive', 8);
+  } catch (erreur) {
+    console.error('Erreur actionMenuAudit :', erreur);
+    SpreadsheetApp.getUi().alert('🌱 Erreur lors de l\'audit Drive', erreur.message, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
 }
 
 /**
  * Action du menu : envoie les notifications par e-mail.
  */
 function actionMenuNotifier() {
-  const resultat = envoyerNotificationsProprietaires();
-  SpreadsheetApp.getActiveSpreadsheet().toast(`${resultat.emailsEnvoyes} bilan(s) envoyé(s).`, '🌱 Notifications', 5);
+  try {
+    const resultat = envoyerNotificationsProprietaires();
+    SpreadsheetApp.getActiveSpreadsheet().toast(`${resultat.emailsEnvoyes} bilan(s) envoyé(s).`, '🌱 Notifications', 5);
+  } catch (erreur) {
+    console.error('Erreur actionMenuNotifier :', erreur);
+    SpreadsheetApp.getUi().alert('🌱 Erreur d\'envoi des notifications', erreur.message, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
 }
 
 /**
- * Ouvre la console de nettoyage en barre latérale dans Google Sheets.
+ * Ouvre la console de nettoyage en boîte de dialogue modale élégante dans Google Sheets.
  */
 function afficherConsoleNettoyage() {
-  const template = HtmlService.createTemplateFromFile('Ui');
-  template.langueInitiale = obtenirLangueUtilisateur_();
-  const html = template.evaluate()
-    .setTitle('🌱 Drive Sleep & Green FinOps')
-    .setWidth(420);
-  SpreadsheetApp.getUi().showSidebar(html);
+  try {
+    const langue = obtenirLangueUtilisateur_();
+    const t = TEXTES_INTERFACE[langue];
+    const template = HtmlService.createTemplateFromFile('Ui');
+    template.langueInitiale = langue;
+    const html = template.evaluate()
+      .setTitle(`🌱 ${t.titreConsole}`)
+      .setWidth(880)
+      .setHeight(680);
+    SpreadsheetApp.getUi().showModalDialog(html, `🌱 ${t.titreConsole}`);
+  } catch (erreur) {
+    console.error('Erreur afficherConsoleNettoyage :', erreur);
+    SpreadsheetApp.getUi().alert('🌱 Erreur', erreur.message, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
 }
 
 /**
@@ -86,23 +109,25 @@ function chargerDonneesConsole() {
   const emailActif = (Session.getActiveUser().getEmail() || '').toLowerCase();
   const fichiers = [];
 
+  const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
   if (feuilleInv && feuilleInv.getLastRow() >= 2) {
-    const lignes = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, 9).getValues();
+    const lignes = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, nbColonnes).getValues();
     lignes.forEach((ligne) => {
-      const statut = String(ligne[7] ?? '').trim();
-      const proprietaire = String(ligne[5] ?? '').trim().toLowerCase();
+      const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
+      const proprietaire = String(ligne[COLONNES_INVENTAIRE.PROPRIETAIRE] ?? '').trim().toLowerCase();
       if (statut !== STATUTS_FICHIER.DORMANT && statut !== STATUTS_FICHIER.NOTIFIE) {
         return;
       }
-      if (!emailActif || proprietaire === emailActif || lignes.length <= 200) {
+      // Isolation stricte des données : l'utilisateur ne consulte et n'agit que sur ses propres fichiers
+      if (!emailActif || proprietaire === emailActif) {
         fichiers.push({
-          id: String(ligne[0]),
-          nom: String(ligne[1]),
-          mimeType: String(ligne[2]),
-          tailleMo: Number(ligne[3]) || 0,
-          derniereActivite: formaterDateFr_(ligne[4]),
-          proprietaire: String(ligne[5]),
-          url: String(ligne[6])
+          id: String(ligne[COLONNES_INVENTAIRE.ID]),
+          nom: String(ligne[COLONNES_INVENTAIRE.NOM]),
+          mimeType: String(ligne[COLONNES_INVENTAIRE.MIME_TYPE]),
+          tailleMo: Number(ligne[COLONNES_INVENTAIRE.TAILLE_MO]) || 0,
+          derniereActivite: formaterDateFr_(ligne[COLONNES_INVENTAIRE.DERNIERE_ACTIVITE]),
+          proprietaire: String(ligne[COLONNES_INVENTAIRE.PROPRIETAIRE]),
+          url: String(ligne[COLONNES_INVENTAIRE.URL])
         });
       }
     });
@@ -120,15 +145,15 @@ function chargerDonneesConsole() {
  */
 function afficherAPropos() {
   const html = HtmlService.createHtmlOutput(`
-    <div style="font-family:'Google Sans',Roboto,Arial,sans-serif;padding:12px;color:#202124;line-height:1.5;">
+    <div style="font-family:'Google Sans',Roboto,Arial,sans-serif;padding:16px;color:#202124;line-height:1.5;">
       <h3 style="margin-top:0;color:#188038;">🌱 ${CONFIGURATION_PAR_DEFAUT.NOM_APPLICATION} (v${CONFIGURATION_PAR_DEFAUT.VERSION})</h3>
       <p>Outil d'hygiène numérique et FinOps par soustraction pour Google Workspace : détection des fichiers en sommeil, mise à la corbeille assistée et suivi de l'empreinte carbone évitée.</p>
       <p style="color:#5f6368;font-size:12px;"><em>Digital sobriety & FinOps automation tool for Google Workspace.</em></p>
-      <hr style="border:none;border-top:1px solid #dadce0;margin:12px 0;">
+      <hr style="border:none;border-top:1px solid #dadce0;margin:16px 0;">
       <p style="font-size:13px;margin-bottom:4px;"><strong>Développeur / Developer :</strong> ${CONFIGURATION_PAR_DEFAUT.AUTEUR}</p>
-      <p style="font-size:13px;margin-top:0;"><strong>Site Web :</strong> <a href="${CONFIGURATION_PAR_DEFAUT.SITE_WEB}" target="_blank" style="color:#1a73e8;">faucheux.bzh</a></p>
+      <p style="font-size:13px;margin-top:0;"><strong>Site Web :</strong> <a href="${CONFIGURATION_PAR_DEFAUT.SITE_WEB}" target="_blank" style="color:#1a73e8;text-decoration:none;">faucheux.bzh</a></p>
     </div>
-  `).setWidth(420).setHeight(260);
+  `).setWidth(460).setHeight(270);
   SpreadsheetApp.getUi().showModalDialog(html, 'À propos / About');
 }
 
@@ -160,13 +185,18 @@ function supprimerDeclencheursReprise_(nomFonction) {
  * Installe le déclencheur mensuel automatique (le 1er du mois à 7h00) sans créer de doublon.
  */
 function installerDeclencheurMensuel() {
-  supprimerDeclencheursReprise_('lancerAuditDrive');
-  ScriptApp.newTrigger('lancerAuditDrive')
-    .timeBased()
-    .onMonthDay(1)
-    .atHour(7)
-    .create();
-  if (SpreadsheetApp.getActiveSpreadsheet()) {
-    SpreadsheetApp.getActiveSpreadsheet().toast('Déclencheur mensuel activé (le 1er du mois à 07h00).', '🌱 Drive Sleep', 5);
+  try {
+    supprimerDeclencheursReprise_('lancerAuditDrive');
+    ScriptApp.newTrigger('lancerAuditDrive')
+      .timeBased()
+      .onMonthDay(1)
+      .atHour(7)
+      .create();
+    if (SpreadsheetApp.getActiveSpreadsheet()) {
+      SpreadsheetApp.getActiveSpreadsheet().toast('Déclencheur mensuel activé (le 1er du mois à 07h00).', '🌱 Drive Sleep', 5);
+    }
+  } catch (erreur) {
+    console.error('Erreur installerDeclencheurMensuel :', erreur);
+    SpreadsheetApp.getUi().alert('🌱 Erreur déclencheur', erreur.message, SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }

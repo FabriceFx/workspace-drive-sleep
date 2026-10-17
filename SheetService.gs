@@ -89,6 +89,8 @@ function initialiserFeuilleTableauDeBord_(classeur) {
   let feuille = classeur.getSheetByName(NOMS_FEUILLES.TABLEAU_DE_BORD);
   if (!feuille) {
     feuille = classeur.insertSheet(NOMS_FEUILLES.TABLEAU_DE_BORD);
+    const fuseau = Session.getScriptTimeZone() || 'Europe/Paris';
+    const horodatageInitial = Utilities.formatDate(new Date(), fuseau, 'dd/MM/yyyy HH:mm');
     const lignes = [
       ['Indicateur / KPI (Green IT & FinOps)', 'Valeur / Value', 'Unité / Unit'],
       ['Fichiers dormants actifs (DORMANT / NOTIFIE)', 0, 'fichiers / files'],
@@ -98,7 +100,7 @@ function initialiserFeuilleTableauDeBord_(classeur) {
       ['Volume total libéré (mis à la corbeille)', 0, 'Go / GB'],
       ['Empreinte carbone évitée', 0, 'kgCO2e / an'],
       ['Économie FinOps estimée', 0, '€ / an'],
-      ['Dernière mise à jour', new Date().toISOString(), 'ISO-8601']
+      ['Dernière mise à jour', horodatageInitial, 'JJ/MM/AAAA HH:mm']
     ];
     feuille.getRange(1, 1, lignes.length, 3).setValues(lignes);
     feuille.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#e6f4ea');
@@ -186,11 +188,12 @@ function mettreAJourTableauDeBord() {
   let moDormants = 0;
   let moLiberes = 0;
 
+  const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
   if (feuilleInv && feuilleInv.getLastRow() >= 2) {
-    const donnees = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, 9).getValues();
+    const donnees = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, nbColonnes).getValues();
     donnees.forEach((ligne) => {
-      const tailleMo = Number(ligne[3]) || 0;
-      const statut = String(ligne[7] ?? '').trim();
+      const tailleMo = Number(ligne[COLONNES_INVENTAIRE.TAILLE_MO]) || 0;
+      const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
       if (statut === STATUTS_FICHIER.DORMANT || statut === STATUTS_FICHIER.NOTIFIE) {
         nbDormants++;
         moDormants += tailleMo;
@@ -207,7 +210,8 @@ function mettreAJourTableauDeBord() {
   const goLiberes = Number((moLiberes / 1024).toFixed(3));
   const co2EviteKg = Number((goLiberes * config.FACTEUR_CO2_KG_PAR_GO_AN).toFixed(3));
   const economieEur = Number((goLiberes * config.COUT_GO_ANNUEL_EUR).toFixed(2));
-  const horodatage = new Date().toISOString();
+  const fuseau = Session.getScriptTimeZone() || 'Europe/Paris';
+  const horodatage = Utilities.formatDate(new Date(), fuseau, 'dd/MM/yyyy HH:mm');
 
   if (feuilleTdb) {
     const valeursMaj = [

@@ -61,12 +61,15 @@ function evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus) {
     ? fichier.owners[0].emailAddress
     : (Session.getActiveUser().getEmail() || 'inconnu@domaine.local');
 
+  const fuseau = Session.getScriptTimeZone() || 'Europe/Paris';
+  const derniereActiviteFr = Utilities.formatDate(derniereActivite, fuseau, 'dd/MM/yyyy');
+
   return {
     id: fichier.id,
     nom: fichier.name || 'Sans titre',
     mimeType: fichier.mimeType || 'application/octet-stream',
     tailleMo,
-    derniereActiviteIso: derniereActivite.toISOString().split('T')[0],
+    derniereActiviteIso: derniereActiviteFr,
     proprietaire: emailProprietaire,
     url: fichier.webViewLink || `https://drive.google.com/open?id=${fichier.id}`
   };
@@ -110,7 +113,7 @@ function lancerAuditDrive() {
         parametresRequete.pageToken = jetonPage;
       }
 
-      const reponse = Drive.Files.list(parametresRequete);
+      const reponse = executerAvecRetry_(() => Drive.Files.list(parametresRequete));
       const fichiers = reponse.files || [];
       fichiersScannes += fichiers.length;
 
@@ -118,17 +121,17 @@ function lancerAuditDrive() {
         const candidat = evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus);
         if (candidat) {
           idsExclus.add(candidat.id);
-          lignesAInserer.push([
-            candidat.id,
-            candidat.nom,
-            candidat.mimeType,
-            candidat.tailleMo,
-            candidat.derniereActiviteIso,
-            candidat.proprietaire,
-            candidat.url,
-            STATUTS_FICHIER.DORMANT,
-            ''
-          ]);
+          const nouvelleLigne = [];
+          nouvelleLigne[COLONNES_INVENTAIRE.ID] = candidat.id;
+          nouvelleLigne[COLONNES_INVENTAIRE.NOM] = candidat.nom;
+          nouvelleLigne[COLONNES_INVENTAIRE.MIME_TYPE] = candidat.mimeType;
+          nouvelleLigne[COLONNES_INVENTAIRE.TAILLE_MO] = candidat.tailleMo;
+          nouvelleLigne[COLONNES_INVENTAIRE.DERNIERE_ACTIVITE] = candidat.derniereActiviteIso;
+          nouvelleLigne[COLONNES_INVENTAIRE.PROPRIETAIRE] = candidat.proprietaire;
+          nouvelleLigne[COLONNES_INVENTAIRE.URL] = candidat.url;
+          nouvelleLigne[COLONNES_INVENTAIRE.STATUT] = STATUTS_FICHIER.DORMANT;
+          nouvelleLigne[COLONNES_INVENTAIRE.DATE_TRAITEMENT] = '';
+          lignesAInserer.push(nouvelleLigne);
         }
       });
 
@@ -161,6 +164,37 @@ function lancerAuditDrive() {
 }
 
 /**
+ * Exécute une opération avec retry et backoff exponentiel pour absorber les erreurs transitoires (429, 500, 503).
+ * @param {Function} operation Fonction sans argument à exécuter.
+ * @param {number} [maxTentatives=3] Nombre maximal de tentatives.
+ * @param {number} [delaiInitialMs=1000] Délai initial en millisecondes.
+ * @returns {*} Résultat de l'opération.
+ */
+function executerAvecRetry_(operation, maxTentatives = 3, delaiInitialMs = 1000) {
+  let tentative = 0;
+  while (tentative < maxTentatives) {
+    try {
+      return operation();
+    } catch (erreur) {
+      tentative++;
+      const message = String(erreur.message || erreur);
+      const estTransitoire = message.includes('429') ||
+        message.includes('500') ||
+        message.includes('503') ||
+        message.includes('User Rate Limit') ||
+        message.includes('Rate Limit Exceeded') ||
+        message.includes('quota');
+      if (!estTransitoire || tentative >= maxTentatives) {
+        throw erreur;
+      }
+      const delai = delaiInitialMs * Math.pow(2, tentative - 1) + Math.random() * 200;
+      console.warn(`Tentative ${tentative}/${maxTentatives} échouée (${message}). Nouvelle tentative dans ${Math.round(delai)} ms.`);
+      Utilities.sleep(Math.round(delai));
+    }
+  }
+}
+
+/**
  * Place une liste d'identifiants de fichiers à la corbeille ou en liste blanche.
  * @param {Object} payload Objet contenant { action: 'CORBEILLE'|'LISTE_BLANCHE', idsFichiers: string[], motif?: string }
  * @returns {Object} Résultat de l'opération et KPI mis à jour.
@@ -173,7 +207,8 @@ function traiterDecisionsUtilisateur(payload) {
     ? STATUTS_FICHIER.LISTE_BLANCHE
     : STATUTS_FICHIER.CORBEILLE;
   const ensembleCible = new Set(payload.idsFichiers.map((id) => String(id).trim()));
-  const maintenantIso = new Date().toISOString().split('T')[0];
+  const fuseau = Session.getScriptTimeZone() || 'Europe/Paris';
+  const maintenantFr = Utilities.formatDate(new Date(), fuseau, 'dd/MM/yyyy');
 
   const verrou = LockService.getScriptLock();
   if (!verrou.tryLock(15000)) {
@@ -188,37 +223,40 @@ function traiterDecisionsUtilisateur(payload) {
       return { traites: 0, kpi: mettreAJourTableauDeBord() };
     }
 
-    const plage = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, 9);
+    const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
+    const plage = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, nbColonnes);
     const lignes = plage.getValues();
     const nouvellesEntreesLb = [];
     let compteurTraites = 0;
 
     lignes.forEach((ligne) => {
-      const idFichier = String(ligne[0] ?? '').trim();
-      const statutActuel = String(ligne[7] ?? '').trim();
+      const idFichier = String(ligne[COLONNES_INVENTAIRE.ID] ?? '').trim();
+      const statutActuel = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
       if (!ensembleCible.has(idFichier) || statutActuel === STATUTS_FICHIER.CORBEILLE) {
         return;
       }
 
       if (action === STATUTS_FICHIER.CORBEILLE) {
         try {
-          Drive.Files.update({ trashed: true }, idFichier, null, { supportsAllDrives: true });
-          ligne[7] = STATUTS_FICHIER.CORBEILLE;
-          ligne[8] = maintenantIso;
+          executerAvecRetry_(() => {
+            Drive.Files.update({ trashed: true }, idFichier, null, { supportsAllDrives: true });
+          });
+          ligne[COLONNES_INVENTAIRE.STATUT] = STATUTS_FICHIER.CORBEILLE;
+          ligne[COLONNES_INVENTAIRE.DATE_TRAITEMENT] = maintenantFr;
           compteurTraites++;
         } catch (erreurDrive) {
           console.warn(`Impossible de placer le fichier ${idFichier} à la corbeille :`, erreurDrive.message);
         }
       } else {
-        ligne[7] = STATUTS_FICHIER.LISTE_BLANCHE;
-        ligne[8] = maintenantIso;
-        nouvellesEntreesLb.push([
-          idFichier,
-          ligne[1],
-          ligne[5],
-          maintenantIso,
-          payload.motif || 'Conserver (Validation utilisateur)'
-        ]);
+        ligne[COLONNES_INVENTAIRE.STATUT] = STATUTS_FICHIER.LISTE_BLANCHE;
+        ligne[COLONNES_INVENTAIRE.DATE_TRAITEMENT] = maintenantFr;
+        const nouvelleEntree = [];
+        nouvelleEntree[COLONNES_LISTE_BLANCHE.ID] = idFichier;
+        nouvelleEntree[COLONNES_LISTE_BLANCHE.NOM] = ligne[COLONNES_INVENTAIRE.NOM];
+        nouvelleEntree[COLONNES_LISTE_BLANCHE.PROPRIETAIRE] = ligne[COLONNES_INVENTAIRE.PROPRIETAIRE];
+        nouvelleEntree[COLONNES_LISTE_BLANCHE.DATE_AJOUT] = maintenantFr;
+        nouvelleEntree[COLONNES_LISTE_BLANCHE.MOTIF] = payload.motif || 'Conserver (Validation utilisateur)';
+        nouvellesEntreesLb.push(nouvelleEntree);
         compteurTraites++;
       }
     });
@@ -226,7 +264,7 @@ function traiterDecisionsUtilisateur(payload) {
     plage.setValues(lignes);
 
     if (nouvellesEntreesLb.length > 0 && feuilleLb) {
-      feuilleLb.getRange(feuilleLb.getLastRow() + 1, 1, nouvellesEntreesLb.length, 5).setValues(nouvellesEntreesLb);
+      feuilleLb.getRange(feuilleLb.getLastRow() + 1, 1, nouvellesEntreesLb.length, Object.keys(COLONNES_LISTE_BLANCHE).length).setValues(nouvellesEntreesLb);
     }
 
     const kpi = mettreAJourTableauDeBord();
