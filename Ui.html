@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Drive Sleep & Green FinOps</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #188038;
+      --primary-hover: #137333;
+      --blue: #1a73e8;
+      --surface: #ffffff;
+      --bg: #f8f9fa;
+      --border: #dadce0;
+      --text: #202124;
+      --muted: #5f6368;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Roboto', Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 16px;
+      font-size: 13px;
+    }
+    .container { max-width: 820px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .header h1 { font-size: 18px; color: var(--primary); margin: 0; }
+    .lang-switch {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 12px;
+    }
+    .subtitle { color: var(--muted); margin-top: 0; margin-bottom: 16px; line-height: 1.4; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+    .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+    .kpi-val { font-size: 16px; font-weight: 700; color: var(--primary); display: block; }
+    .kpi-label { font-size: 11px; color: var(--muted); }
+    .actions-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    button { border: none; border-radius: 4px; padding: 8px 12px; font-size: 12px; font-weight: 500; cursor: pointer; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #e8f0fe; color: var(--blue); }
+    .btn-outline { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+    .file-list { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; max-height: 420px; overflow-y: auto; }
+    .file-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #f1f3f4; }
+    .file-item:last-child { border-bottom: none; }
+    .file-info { flex: 1; min-width: 0; }
+    .file-name { font-weight: 500; color: var(--blue); text-decoration: none; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .status-msg { margin-top: 12px; padding: 10px; border-radius: 6px; background: #e6f4ea; color: var(--primary); display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 id="titreConsole">🌱 Console de sobriété numérique</h1>
+      <button class="lang-switch" id="btnLangue" onclick="basculerLangue()">FR / EN</button>
+    </div>
+    <p class="subtitle" id="sousTitreConsole"></p>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <span class="kpi-val" id="valFichiers">0</span>
+        <span class="kpi-label" id="lblFichiers">Fichiers</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-val" id="valVolume">0 Mo</span>
+        <span class="kpi-label" id="lblVolume">Volume</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-val" id="valCarbone">0 g</span>
+        <span class="kpi-label" id="lblCarbone">CO2e / an</span>
+      </div>
+    </div>
+
+    <div class="actions-bar">
+      <button class="btn-outline" id="btnTout" onclick="toutSelectionner()"></button>
+      <button class="btn-primary" id="btnCorbeille" onclick="executerAction('CORBEILLE')"></button>
+      <button class="btn-secondary" id="btnListeBlanche" onclick="executerAction('LISTE_BLANCHE')"></button>
+    </div>
+
+    <div class="file-list" id="listeFichiers"></div>
+    <div class="status-msg" id="messageStatut"></div>
+  </div>
+
+  <script>
+    let langueCourante = '<?= langueInitiale ?>' || 'fr';
+    let etat = { fichiers: [], facteurCo2: 0.2, textes: null };
+    let toutCoche = true;
+
+    function initialiser() {
+      google.script.run
+        .withSuccessHandler((reponse) => {
+          etat = reponse;
+          afficherInterface();
+        })
+        .withFailureHandler((err) => {
+          afficherMessage(err.message, true);
+        })
+        .chargerDonneesConsole();
+    }
+
+    function basculerLangue() {
+      langueCourante = langueCourante === 'fr' ? 'en' : 'fr';
+      afficherInterface();
+    }
+
+    function afficherInterface() {
+      if (!etat.textes) return;
+      const t = etat.textes[langueCourante];
+      document.getElementById('titreConsole').textContent = '🌱 ' + t.titreConsole;
+      document.getElementById('sousTitreConsole').textContent = t.sousTitreConsole;
+      document.getElementById('lblFichiers').textContent = t.kpiFichiers;
+      document.getElementById('lblVolume').textContent = t.kpiVolume;
+      document.getElementById('lblCarbone').textContent = t.kpiCarbone;
+      document.getElementById('btnTout').textContent = t.btnToutSelectionner;
+      document.getElementById('btnCorbeille').textContent = '🗑️ ' + t.btnMettreCorbeille;
+      document.getElementById('btnListeBlanche').textContent = '🛡️ ' + t.btnListeBlanche;
+
+      const conteneur = document.getElementById('listeFichiers');
+      conteneur.textContent = '';
+
+      let totalMo = 0;
+      if (etat.fichiers.length === 0) {
+        const vide = document.createElement('div');
+        vide.style.padding = '20px';
+        vide.style.textAlign = 'center';
+        vide.textContent = t.aucunFichier;
+        conteneur.appendChild(vide);
+      } else {
+        etat.fichiers.forEach((f) => {
+          totalMo += Number(f.tailleMo) || 0;
+          const ligne = document.createElement('div');
+          ligne.className = 'file-item';
+
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.className = 'cb-fichier';
+          cb.value = f.id;
+          cb.checked = true;
+
+          const info = document.createElement('div');
+          info.className = 'file-info';
+
+          const lien = document.createElement('a');
+          lien.className = 'file-name';
+          lien.href = f.url;
+          lien.target = '_blank';
+          lien.textContent = f.nom;
+
+          const meta = document.createElement('div');
+          meta.className = 'file-meta';
+          meta.textContent = `${f.tailleMo} Mo • Inactif depuis : ${f.derniereActivite}`;
+
+          info.appendChild(lien);
+          info.appendChild(meta);
+          ligne.appendChild(cb);
+          ligne.appendChild(info);
+          conteneur.appendChild(ligne);
+        });
+      }
+
+      const co2Grammes = Math.round((totalMo / 1024) * etat.facteurCo2 * 1000);
+      document.getElementById('valFichiers').textContent = String(etat.fichiers.length);
+      document.getElementById('valVolume').textContent = totalMo.toFixed(1) + ' Mo';
+      document.getElementById('valCarbone').textContent = co2Grammes + ' gCO2e';
+    }
+
+    function toutSelectionner() {
+      toutCoche = !toutCoche;
+      document.querySelectorAll('.cb-fichier').forEach((cb) => { cb.checked = toutCoche; });
+    }
+
+    function executerAction(action) {
+      const ids = Array.from(document.querySelectorAll('.cb-fichier:checked')).map((cb) => cb.value);
+      if (ids.length === 0) return;
+      document.getElementById('btnCorbeille').disabled = true;
+      document.getElementById('btnListeBlanche').disabled = true;
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          const ensembleTraite = new Set(ids);
+          etat.fichiers = etat.fichiers.filter((f) => !ensembleTraite.has(f.id));
+          document.getElementById('btnCorbeille').disabled = false;
+          document.getElementById('btnListeBlanche').disabled = false;
+          afficherInterface();
+          afficherMessage(`${etat.textes[langueCourante].confirmationSucces} (${res.traites})`, false);
+        })
+        .withFailureHandler((err) => {
+          document.getElementById('btnCorbeille').disabled = false;
+          document.getElementById('btnListeBlanche').disabled = false;
+          afficherMessage(err.message, true);
+        })
+        .traiterDecisionsUtilisateur({ action, idsFichiers: ids });
+    }
+
+    function afficherMessage(texte, estErreur) {
+      const box = document.getElementById('messageStatut');
+      box.style.display = 'block';
+      box.style.background = estErreur ? '#fce8e6' : '#e6f4ea';
+      box.style.color = estErreur ? '#c5221f' : '#188038';
+      box.textContent = texte;
+    }
+
+    window.addEventListener('DOMContentLoaded', initialiser);
+  </script>
+</body>
+</html>
