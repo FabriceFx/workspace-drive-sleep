@@ -4,6 +4,7 @@
 
 /**
  * Crée et formate les 4 onglets nécessaires s'ils n'existent pas encore.
+ * Supprime l'onglet vierge initial (ex. Feuille 1 / Sheet1) s'il est vide.
  * Enregistre l'ID du classeur maître dans PropertiesService.
  */
 function initialiserEnvironnement() {
@@ -15,8 +16,46 @@ function initialiserEnvironnement() {
   initialiserFeuilleListeBlanche_(classeur);
   initialiserFeuilleTableauDeBord_(classeur);
 
+  supprimerFeuilleInitialeSiVierge_(classeur);
+
   mettreAJourTableauDeBord();
+
+  // Activer l'onglet Tableau_de_Bord pour positionner l'utilisateur au bon endroit
+  const feuilleTdb = classeur.getSheetByName(NOMS_FEUILLES.TABLEAU_DE_BORD);
+  if (feuilleTdb) {
+    classeur.setActiveSheet(feuilleTdb);
+  }
+
   console.info('Environnement initialisé avec succès sur le classeur :', classeur.getId());
+}
+
+/**
+ * Supprime la feuille vierge initiale (ex. 'Feuille 1' ou 'Sheet1') si elle est inutilisée.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} classeur
+ */
+function supprimerFeuilleInitialeSiVierge_(classeur) {
+  const feuillesRequises = new Set(Object.values(NOMS_FEUILLES));
+  const toutesFeuilles = classeur.getSheets();
+
+  toutesFeuilles.forEach((feuille) => {
+    const nom = feuille.getName();
+    if (!feuillesRequises.has(nom)) {
+      const derniereLigne = feuille.getLastRow();
+      const derniereCol = feuille.getLastColumn();
+      const estCompletementVide = derniereLigne === 0;
+      const celluleA1Vide = (derniereLigne <= 1 && derniereCol <= 1 && String(feuille.getRange(1, 1).getValue() ?? '').trim() === '');
+      const estNomParDefaut = /^(feuille\s*\d*|sheet\s*\d*)$/i.test(nom.trim());
+
+      if ((estCompletementVide || celluleA1Vide) && (estNomParDefaut || estCompletementVide)) {
+        try {
+          classeur.deleteSheet(feuille);
+          console.info(`Feuille initiale inutile '${nom}' supprimée.`);
+        } catch (erreur) {
+          console.warn(`Impossible de supprimer la feuille '${nom}' :`, erreur.message);
+        }
+      }
+    }
+  });
 }
 
 /**

@@ -7,7 +7,7 @@
 const CONFIGURATION_PAR_DEFAUT = Object.freeze({
   NOM_APPLICATION: 'Drive Sleep & Green FinOps',
   VERSION: '1.1.0',
-  AUTEUR: 'Fabrice Faucheux (FF Labs)',
+  AUTEUR: 'Fabrice Faucheux',
   SITE_WEB: 'https://faucheux.bzh',
   DUREE_MAX_EXECUTION_MS: 270000, // 4 min 30 s pour respecter la limite des 6 min
   TAILLE_PAGE_DRIVE: 100,
