@@ -88,7 +88,8 @@ const TEXTES_INTERFACE = Object.freeze({
     messageModalCorbeille: 'Êtes-vous certain de vouloir déplacer les {nb} fichier(s) sélectionné(s) ({volume}) à la corbeille ? Vous disposerez de 30 jours pour les restaurer depuis Google Drive.',
     btnConfirmer: 'Oui, mettre à la corbeille',
     btnAnnuler: 'Annuler',
-    erreurServeur: 'Une erreur est survenue lors de l\'opération :'
+    erreurServeur: 'Une erreur est survenue lors de l\'opération :',
+    placeholderFiltre: 'Filtrer par nom ou type (ex. pdf, sheet)...'
   },
   en: {
     titreMenu: '🌱 Drive Sleep',
@@ -118,7 +119,8 @@ const TEXTES_INTERFACE = Object.freeze({
     messageModalCorbeille: 'Are you sure you want to move {nb} selected file(s) ({volume}) to the trash? You can restore them from Google Drive within 30 days.',
     btnConfirmer: 'Yes, move to trash',
     btnAnnuler: 'Cancel',
-    erreurServeur: 'An error occurred during the operation:'
+    erreurServeur: 'An error occurred during the operation:',
+    placeholderFiltre: 'Filter by name or type (e.g. pdf, sheet)...'
   }
 });
 

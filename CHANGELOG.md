@@ -18,6 +18,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - **Sécurité anti-fausse manipulation** : Dialogue modal natif `<dialog>` avec confirmation explicite indiquant le nombre précis de fichiers et le volume exact avant toute mise à la corbeille.
 - **Indicateur de chargement asynchrone (Skeleton loader)** : Plus d'écran blanc pendant la récupération des données via `google.script.run`.
 - **Filtre de recherche instantané** : Recherche instantanée par nom de fichier directement dans la console de nettoyage.
+- **Affichage et filtrage par type de fichier** : Identification visuelle immédiate dans la console (icône dédiée et badge MD3 pour Google Sheets, Docs, Slides, Formulaires, PDF, Excel, Word, Archives, Vidéos, etc.) et filtrage combiné par nom et par format.
 - **Résilience réseau & Quotas** : Fonction `executerAvecRetry_` avec backoff exponentiel pour absorber les pics de charge et erreurs transitoires 429 de l'API Google Drive.
 - **Gestion globale des exceptions** : Protection `try/catch` sur l'ensemble des actions de menu avec alertes utilisateurs claires et actionnables.
 

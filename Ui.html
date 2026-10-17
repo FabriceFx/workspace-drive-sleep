@@ -366,6 +366,13 @@
       font-size: 10.5px;
     }
 
+    .badge-type {
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      font-weight: 600;
+    }
+
     /* Skeleton Loading */
     .skeleton-wrap {
       padding: 16px;
@@ -596,6 +603,56 @@
       return etat.textes[langueCourante] || etat.textes.fr;
     }
 
+    /**
+     * Détermine l'icône et le libellé lisible du type de fichier.
+     * @param {string} mimeType Type MIME du fichier.
+     * @param {string} nomFichier Nom du fichier.
+     * @returns {{icone: string, libelle: string}}
+     */
+    function obtenirInfosTypeFichier(mimeType, nomFichier) {
+      const mime = (mimeType || '').toLowerCase();
+      const nom = (nomFichier || '').toLowerCase();
+      const ext = nom.includes('.') ? nom.split('.').pop() : '';
+
+      if (mime.includes('spreadsheet') || mime.includes('excel') || ext === 'xlsx' || ext === 'xls') {
+        return { icone: '📊', libelle: mime.includes('google-apps') ? 'Google Sheet' : 'Excel' };
+      }
+      if (mime.includes('presentation') || mime.includes('powerpoint') || ext === 'pptx' || ext === 'ppt') {
+        return { icone: '📑', libelle: mime.includes('google-apps') ? 'Google Slides' : 'PowerPoint' };
+      }
+      if (mime.includes('document') || mime.includes('word') || ext === 'docx' || ext === 'doc') {
+        return { icone: '📄', libelle: mime.includes('google-apps') ? 'Google Doc' : 'Word' };
+      }
+      if (mime.includes('form')) {
+        return { icone: '📋', libelle: 'Google Forms' };
+      }
+      if (mime.includes('pdf') || ext === 'pdf') {
+        return { icone: '📕', libelle: 'PDF' };
+      }
+      if (mime.includes('image') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) {
+        return { icone: '🖼️', libelle: ext ? ext.toUpperCase() : 'Image' };
+      }
+      if (mime.includes('video') || ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) {
+        return { icone: '🎬', libelle: ext ? ext.toUpperCase() : 'Vidéo' };
+      }
+      if (mime.includes('audio') || ['mp3', 'wav', 'ogg', 'm4a', 'flac'].includes(ext)) {
+        return { icone: '🎵', libelle: ext ? ext.toUpperCase() : 'Audio' };
+      }
+      if (mime.includes('zip') || mime.includes('tar') || mime.includes('compressed') || ['zip', 'tar', 'gz', '7z', 'rar'].includes(ext)) {
+        return { icone: '📦', libelle: ext ? ext.toUpperCase() : 'Archive' };
+      }
+      if (mime.includes('csv') || ext === 'csv') {
+        return { icone: '📊', libelle: 'CSV' };
+      }
+      if (mime.includes('text') || ['txt', 'md', 'log'].includes(ext)) {
+        return { icone: '📝', libelle: ext ? ext.toUpperCase() : 'Texte' };
+      }
+      if (mime.includes('script') || ['js', 'gs', 'py', 'html', 'css', 'json'].includes(ext)) {
+        return { icone: '⚙️', libelle: ext ? ext.toUpperCase() : 'Script' };
+      }
+      return { icone: '📁', libelle: ext ? ext.toUpperCase() : 'Fichier' };
+    }
+
     function afficherInterface() {
       const t = obtenirTextes();
       if (!t) return;
@@ -611,6 +668,7 @@
       document.getElementById('txtBtnTout').textContent = t.btnToutSelectionner;
       document.getElementById('txtBtnCorbeille').textContent = t.btnMettreCorbeille;
       document.getElementById('txtBtnListeBlanche').textContent = t.btnListeBlanche;
+      document.getElementById('inputFiltre').placeholder = t.placeholderFiltre || 'Filtrer par nom ou type...';
       document.getElementById('btnLangue').textContent = langueCourante.toUpperCase() + ' ⇄ ' + (langueCourante === 'fr' ? 'EN' : 'FR');
 
       recalculerKpi();
@@ -663,7 +721,9 @@
 
       const fichiersFiltres = etat.fichiers.filter((f) => {
         if (!termeFiltre) return true;
-        return (f.nom || '').toLowerCase().includes(termeFiltre);
+        const typeInfo = obtenirInfosTypeFichier(f.mimeType, f.nom);
+        const texteRecherche = `${f.nom || ''} ${typeInfo.libelle}`.toLowerCase();
+        return texteRecherche.includes(termeFiltre);
       });
 
       if (fichiersFiltres.length === 0) {
@@ -701,6 +761,8 @@
 
         cbWrap.appendChild(cb);
 
+        const typeInfo = obtenirInfosTypeFichier(f.mimeType, f.nom);
+
         const details = document.createElement('div');
         details.className = 'file-details';
 
@@ -709,10 +771,14 @@
         link.href = f.url;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
-        link.textContent = f.nom || 'Sans titre';
+        link.textContent = `${typeInfo.icone} ${f.nom || 'Sans titre'}`;
 
         const badges = document.createElement('div');
         badges.className = 'file-badges';
+
+        const badgeType = document.createElement('span');
+        badgeType.className = 'badge badge-type';
+        badgeType.textContent = typeInfo.libelle;
 
         const badgeTaille = document.createElement('span');
         badgeTaille.className = 'badge';
@@ -722,6 +788,7 @@
         badgeDate.className = 'badge';
         badgeDate.textContent = `🕒 ${libelleInactif} ${f.derniereActivite}`;
 
+        badges.appendChild(badgeType);
         badges.appendChild(badgeTaille);
         badges.appendChild(badgeDate);
 
