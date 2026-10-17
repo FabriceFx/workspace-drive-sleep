@@ -51,12 +51,61 @@ function actionMenuAudit() {
 }
 
 /**
- * Action du menu : envoie les notifications par e-mail.
+ * Action du menu : envoie les notifications par e-mail avec diagnostic interactif.
+ * @param {boolean} [forcerRenvoi=false]
  */
-function actionMenuNotifier() {
+function actionMenuNotifier(forcerRenvoi = false) {
   try {
-    const resultat = envoyerNotificationsProprietaires();
-    SpreadsheetApp.getActiveSpreadsheet().toast(`${resultat.emailsEnvoyes} bilan(s) envoyé(s).`, '🌱 Notifications', 5);
+    const resultat = envoyerNotificationsProprietaires({ forcerRenvoi });
+
+    if (resultat.emailsEnvoyes > 0) {
+      SpreadsheetApp.getActiveSpreadsheet().toast(
+        `${resultat.emailsEnvoyes} bilan(s) envoyé(s) avec succès.`,
+        '🌱 Notifications',
+        6
+      );
+      return;
+    }
+
+    if (resultat.erreurs && resultat.erreurs.length > 0) {
+      SpreadsheetApp.getUi().alert(
+        '🌱 Échec d\'envoi d\'e-mail',
+        `Une anomalie a empêché l'envoi :\n\n${resultat.erreurs.join('\n')}`,
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+      return;
+    }
+
+    if (resultat.quotaRestant <= 1) {
+      SpreadsheetApp.getUi().alert(
+        '🌱 Quota quotidien atteint',
+        'Le quota quotidien d\'envoi d\'e-mails Google est épuisé (0 restant pour aujourd\'hui). Google réinitialise ce compteur toutes les 24 heures.',
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+      return;
+    }
+
+    if (resultat.nbDormants === 0) {
+      if (resultat.nbDejaNotifies > 0 && !forcerRenvoi) {
+        const reponse = SpreadsheetApp.getUi().alert(
+          '🌱 Fichiers déjà notifiés',
+          `Aucun nouveau fichier au statut DORMANT.\n\nLes ${resultat.nbDejaNotifies} fichier(s) répertoriés dans l'inventaire ont déjà le statut NOTIFIE.\n\nSouhaitez-vous forcer un renvoi du bilan par e-mail aux propriétaires ?`,
+          SpreadsheetApp.getUi().ButtonSet.YES_NO
+        );
+        if (reponse === SpreadsheetApp.getUi().Button.YES) {
+          actionMenuNotifier(true);
+        }
+      } else {
+        SpreadsheetApp.getUi().alert(
+          '🌱 Aucun fichier à notifier',
+          'Aucun fichier dormant trouvé dans l\'onglet Inventaire_Dormant.\n\nLancez d\'abord l\'audit des fichiers dormants (menu n°2).',
+          SpreadsheetApp.getUi().ButtonSet.OK
+        );
+      }
+      return;
+    }
+
+    SpreadsheetApp.getActiveSpreadsheet().toast('Aucun bilan n\'a été envoyé.', '🌱 Notifications', 5);
   } catch (erreur) {
     console.error('Erreur actionMenuNotifier :', erreur);
     SpreadsheetApp.getUi().alert('🌱 Erreur d\'envoi des notifications', erreur.message, SpreadsheetApp.getUi().ButtonSet.OK);

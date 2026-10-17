@@ -59,7 +59,7 @@ function evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus) {
 
   const emailProprietaire = (Array.isArray(fichier.owners) && fichier.owners[0]?.emailAddress)
     ? fichier.owners[0].emailAddress
-    : (Session.getActiveUser().getEmail() || 'inconnu@domaine.local');
+    : (Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '');
 
   const fuseau = Session.getScriptTimeZone() || 'Europe/Paris';
   const derniereActiviteFr = Utilities.formatDate(derniereActivite, fuseau, 'dd/MM/yyyy');

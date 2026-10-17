@@ -7,23 +7,83 @@
  * Vérifie préalablement le quota journalier MailApp.
  * @returns {Object} Nombre de notifications envoyées.
  */
-function envoyerNotificationsProprietaires() {
+/**
+ * Détecte dynamiquement la position des colonnes de l'inventaire d'après la ligne d'en-tête.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} feuille
+ * @returns {Object} Mappage des noms de colonnes vers leurs index.
+ */
+function detecterColonnesInventaire_(feuille) {
+  const nbCols = Math.max(feuille.getLastColumn(), Object.keys(COLONNES_INVENTAIRE).length);
+  const enTetes = feuille.getRange(1, 1, 1, nbCols).getValues()[0];
+  const colonnes = { ...COLONNES_INVENTAIRE };
+
+  enTetes.forEach((nom, index) => {
+    const nomNettoye = String(nom ?? '').trim().toLowerCase();
+    if (nomNettoye.includes('id')) colonnes.ID = index;
+    else if (nomNettoye.includes('nom')) colonnes.NOM = index;
+    else if (nomNettoye.includes('mime')) colonnes.MIME_TYPE = index;
+    else if (nomNettoye.includes('taille')) colonnes.TAILLE_MO = index;
+    else if (nomNettoye.includes('activit')) colonnes.DERNIERE_ACTIVITE = index;
+    else if (nomNettoye.includes('proprio') || nomNettoye.includes('owner') || nomNettoye.includes('propri')) colonnes.PROPRIETAIRE = index;
+    else if (nomNettoye.includes('url') || nomNettoye.includes('lien')) colonnes.URL = index;
+    else if (nomNettoye.includes('statut') || nomNettoye.includes('status')) colonnes.STATUT = index;
+    else if (nomNettoye.includes('traitement')) colonnes.DATE_TRAITEMENT = index;
+  });
+
+  return colonnes;
+}
+
+/**
+ * Regroupe les fichiers au statut DORMANT par propriétaire et leur envoie un bilan bilingue.
+ * @param {Object} [options] Options d'envoi { forcerRenvoi: boolean }
+ * @returns {Object} Bilan complet de l'opération (emailsEnvoyes, nbDormants, nbDejaNotifies, quotaRestant, erreurs).
+ */
+function envoyerNotificationsProprietaires(options = {}) {
+  const forcerRenvoi = options && options.forcerRenvoi === true;
   const classeur = obtenirClasseurMaitre_();
   const feuilleInv = classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE);
   if (!feuilleInv || feuilleInv.getLastRow() < 2) {
-    return { emailsEnvoyes: 0 };
+    return {
+      emailsEnvoyes: 0,
+      nbDormants: 0,
+      nbDejaNotifies: 0,
+      quotaRestant: MailApp.getRemainingDailyQuota(),
+      erreurs: []
+    };
   }
 
   const config = lireConfiguration();
-  const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
+  const colonnes = detecterColonnesInventaire_(feuilleInv);
+  const nbColonnes = Math.max(feuilleInv.getLastColumn(), Object.keys(COLONNES_INVENTAIRE).length);
   const plage = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, nbColonnes);
   const lignes = plage.getValues();
   const parProprietaire = new Map();
+  const emailActifSession = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+
+  let nbDormants = 0;
+  let nbDejaNotifies = 0;
 
   lignes.forEach((ligne, index) => {
-    const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
-    const proprietaire = String(ligne[COLONNES_INVENTAIRE.PROPRIETAIRE] ?? '').trim();
-    if (statut === STATUTS_FICHIER.DORMANT && proprietaire.includes('@')) {
+    const statut = String(ligne[colonnes.STATUT] ?? '').trim().toUpperCase();
+    let proprietaire = String(ligne[colonnes.PROPRIETAIRE] ?? '').trim().toLowerCase();
+
+    // Remplacement des adresses factices de secours par l'e-mail de la session active
+    if (!proprietaire || proprietaire.endsWith('@domaine.local') || !proprietaire.includes('@')) {
+      if (emailActifSession) {
+        proprietaire = emailActifSession;
+        ligne[colonnes.PROPRIETAIRE] = emailActifSession;
+      }
+    }
+
+    if (statut === STATUTS_FICHIER.DORMANT) {
+      nbDormants++;
+    } else if (statut === STATUTS_FICHIER.NOTIFIE) {
+      nbDejaNotifies++;
+    }
+
+    const estEligible = (statut === STATUTS_FICHIER.DORMANT) || (forcerRenvoi && statut === STATUTS_FICHIER.NOTIFIE);
+
+    if (estEligible && proprietaire.includes('@')) {
       if (!parProprietaire.has(proprietaire)) {
         parProprietaire.set(proprietaire, []);
       }
@@ -33,6 +93,7 @@ function envoyerNotificationsProprietaires() {
 
   let quotaRestant = MailApp.getRemainingDailyQuota();
   let emailsEnvoyes = 0;
+  const erreurs = [];
   let urlWebApp = '';
   try {
     urlWebApp = ScriptApp.getService().getUrl() || classeur.getUrl();
@@ -43,18 +104,19 @@ function envoyerNotificationsProprietaires() {
   parProprietaire.forEach((elements, email) => {
     if (quotaRestant <= 1) {
       console.warn('Quota d\'envoi d\'e-mails presque épuisé, arrêt des envois.');
+      erreurs.push('Quota d\'envoi quotidien d\'e-mails Google presque épuisé.');
       return;
     }
 
-    const totalMo = elements.reduce((acc, el) => acc + (Number(el.donnees[COLONNES_INVENTAIRE.TAILLE_MO]) || 0), 0);
+    const totalMo = elements.reduce((acc, el) => acc + (Number(el.donnees[colonnes.TAILLE_MO]) || 0), 0);
     const totalGo = (totalMo / 1024).toFixed(2);
     const totalCo2 = ((totalMo / 1024) * config.FACTEUR_CO2_KG_PAR_GO_AN * 1000).toFixed(0);
 
     const lignesHtml = elements.slice(0, 15).map((el) => {
-      const nom = el.donnees[COLONNES_INVENTAIRE.NOM];
-      const tailleMo = el.donnees[COLONNES_INVENTAIRE.TAILLE_MO];
-      const dateAct = el.donnees[COLONNES_INVENTAIRE.DERNIERE_ACTIVITE];
-      const url = el.donnees[COLONNES_INVENTAIRE.URL];
+      const nom = el.donnees[colonnes.NOM];
+      const tailleMo = el.donnees[colonnes.TAILLE_MO];
+      const dateAct = el.donnees[colonnes.DERNIERE_ACTIVITE];
+      const url = el.donnees[colonnes.URL];
       const dateFormatee = formaterDateFr_(dateAct);
       return `<tr>
         <td style="padding:8px;border-bottom:1px solid #eee;"><a href="${url}" style="color:#1a73e8;text-decoration:none;">${echapperHtml_(String(nom))}</a></td>
@@ -85,28 +147,44 @@ function envoyerNotificationsProprietaires() {
       </div>
     `;
 
+    const corpsTexte = `🌱 Bilan de sobriété numérique\n\n` +
+      `Bonjour,\n\n` +
+      `Nous avons identifié ${elements.length} fichier(s) dormant(s) dans votre Google Drive (${totalMo.toFixed(1)} Mo / ${totalGo} Go), représentant environ ${totalCo2} gCO2e/an.\n\n` +
+      `Ouvrir la console de tri : ${urlWebApp}\n`;
+
     try {
       MailApp.sendEmail({
         to: email,
         subject: `🌱 [Sobriété Numérique] ${elements.length} fichier(s) en sommeil (${totalMo.toFixed(1)} Mo)`,
+        body: corpsTexte,
         htmlBody: corpsHtml
       });
 
       elements.forEach((el) => {
-        lignes[el.indexLigne][COLONNES_INVENTAIRE.STATUT] = STATUTS_FICHIER.NOTIFIE;
+        lignes[el.indexLigne][colonnes.STATUT] = STATUTS_FICHIER.NOTIFIE;
       });
 
       quotaRestant--;
       emailsEnvoyes++;
     } catch (erreurEnvoi) {
-      console.warn(`Échec de l'envoi d'e-mail à ${email} :`, erreurEnvoi.message);
+      const msg = `Échec d'envoi à ${email} : ${erreurEnvoi.message}`;
+      console.warn(msg);
+      erreurs.push(msg);
     }
   });
 
   if (emailsEnvoyes > 0) {
     plage.setValues(lignes);
   }
-  return { emailsEnvoyes };
+
+  return {
+    emailsEnvoyes,
+    nbDormants,
+    nbDejaNotifies,
+    quotaRestant,
+    proprietairesTrouves: parProprietaire.size,
+    erreurs
+  };
 }
 
 /**

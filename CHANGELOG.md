@@ -24,7 +24,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 ### Modifié / Changed
 - **Isolation stricte des données** : Suppression du seuil global dans `chargerDonneesConsole()` afin qu'un utilisateur ne voie et n'agisse que sur ses propres fichiers en mode collaboratif.
 - **Architecture de constantes** : Introduction de `COLONNES_INVENTAIRE` et `COLONNES_LISTE_BLANCHE` pour éliminer tout couplage aux index numériques magiques.
-- **Envois d'e-mails résilients** : Protection unitaire `try/catch` par propriétaire afin qu'un e-mail invalide n'interrompe plus la campagne.
+- **Envois d'e-mails résilients & interactifs** : Ajout du corps de texte brut obligatoire `body` dans `MailApp.sendEmail()`, détection dynamique des colonnes d'inventaire, gestion interactive du renvoi pour les fichiers déjà au statut `NOTIFIE` et diagnostic précis en cas de quota épuisé ou d'anomalie.
 - **Sécurisation des expressions régulières** : Remplacement des substitutions `String.replace()` par des fonctions de rappel `() => String(valeur)` conformément aux standards de robustesse.
 
 ---
