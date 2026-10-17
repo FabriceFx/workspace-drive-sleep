@@ -7,6 +7,34 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [1.2.0] - 2026-10-17
+
+### 🎯 Angle émotionnel : Le coût de l'inaction
+> *Vous pensiez que votre audit automatique tournait paisiblement en arrière-plan chaque mois ? En réalité, un simple conflit de déclencheur ou un timeout silencieux suffisait à paralyser vos nettoyages sans laisser de trace. Avec la v1.2.0, finie l'illusion : vos campagnes mensuelles sont indestructibles, vos suppressions massives sont enfin synchronisées à la seconde près, et chaque octet décompté correspond exactement à ce que Google vous facture.*
+
+### Corrigé / Fixed
+- Le déclencheur mensuel n'est plus supprimé à la fin de chaque audit (fonctions distinctes `reprendreAuditDrive` / `executerCampagneMensuelle`).
+- La date limite de l'audit est figée pour toute la campagne : le jeton de page Drive reste valide d'une reprise à l'autre.
+- Deux audits ne peuvent plus tourner en même temps (verrou logique horodaté).
+- La liste blanche protège désormais toute l'arborescence d'un dossier, pas seulement ses enfants directs.
+- Mise à la corbeille par lots de 100 depuis la console, appels Drive hors verrou : plus de dépassement des 6 minutes ni de fichiers mis à la corbeille sans mise à jour de la feuille.
+- La console ne retire de la liste que les fichiers réellement traités.
+- Les envois d'e-mails et les décisions utilisateurs n'écrivent plus que les colonnes Statut / Date_Traitement, sous verrou (plus d'écrasement concurrent).
+- L'audit automatique ne supprime plus les onglets vides du classeur.
+
+### Sécurité / Security
+- Contrôle de propriété côté serveur dans `traiterDecisionsUtilisateur` ; la console refuse de s'afficher sans identité utilisateur (plus de repli « tous les fichiers »).
+- Liens assainis (`https://` uniquement) dans la console et les e-mails ; paramètres de la feuille Configuration validés par liste blanche de clés.
+
+### Modifié / Changed
+- Taille réelle via `quotaBytesUsed` (révisions et fichiers natifs compris).
+- Dates stockées en vraies dates dans la feuille (indépendant des paramètres régionaux).
+- Aucune présélection dans la console ; « Tout cocher » n'agit que sur les fichiers affichés.
+- La campagne mensuelle envoie les bilans e-mail en fin d'audit, conformément à la spécification.
+- Les lignes sans propriétaire valide ne sont plus réattribuées à l'utilisateur de la session.
+
+---
+
 ## [1.1.0] - 2026-10-17
 
 ### 🎯 Angle émotionnel : La terre promise de la clarté et du contrôle

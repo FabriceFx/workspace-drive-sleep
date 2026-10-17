@@ -20,13 +20,13 @@
 
 ## ✨ Fonctionnalités clés / Key Features
 
-- **⚡ Audit paginé anti-timeout (Drive API v3)** : Analyse les fichiers par lots de 100 avec sauvegarde automatique du jeton de pagination (`nextPageToken`) dans `PropertiesService` et reprise automatique par déclencheur si le traitement approche 4 min 30 s (limite GAS des 6 minutes).
+- **⚡ Audit paginé anti-timeout (Drive API v3)** : Analyse les fichiers par lots de 500 avec sauvegarde automatique du jeton de pagination (`nextPageToken`) dans `PropertiesService` et reprise automatique par déclencheur programmable avec budget de temps maîtrisé (4 min) sous la limite GAS des 6 minutes.
 - **🎯 Filtrage hybride intelligent** : Cible les fichiers binaires sur le couple *Ancienneté + Poids minimal (Mo)* et les fichiers natifs Google (Docs, Sheets, Slides) sur leur date de dernière consultation ou modification.
 - **🎨 Console de nettoyage Material Design 3** : Interface fluide bilingue (FR/EN) avec skeleton loader, recalcul dynamique des KPI en direct selon les cases cochées, dialogue modal de confirmation sécurisé et filtre de recherche instantané.
-- **🛡️ Sécurité anti-perte absolue** : Déplace les fichiers vers la corbeille Google Drive (`trashed = true`, restaurable sous 30 jours) et permet de sanctuariser des documents ou dossiers entiers via une feuille `Liste_Blanche`.
+- **🛡️ Sécurité anti-perte absolue** : Déplace les fichiers vers la corbeille Google Drive (`trashed = true`, restaurable sous 30 jours) et permet de sanctuariser des documents ou des dossiers entiers, sous-dossiers compris, via une feuille `Liste_Blanche`. Chaque utilisateur ne peut agir que sur ses propres fichiers (contrôle côté serveur).
 - **📊 Tableau de bord Green IT & FinOps** : Consolide en continu le nombre de fichiers traités, les gigaoctets libérés, les kilogrammes de CO2 évités et les économies budgétaires estimées.
 - **✉️ Bilan de sobriété numérique par e-mail** : Envoi de bilans personnalisés aux propriétaires avec respect strict des quotas journaliers `MailApp`.
-- **🧪 Suite de tests unitaires intégrée** : Tests automatisés dans [Tests.gs](file:///Users/fabrice/Documents/Claude/workspace-drive-sleep/Tests.gs) (`runAllTests()`) pour valider le filtrage, les quotas, le retry et la sécurité HTML.
+- **🧪 Suite de tests unitaires intégrée** : Tests automatisés dans [Tests.gs](Tests.gs) (`runAllTests()`) pour valider le filtrage, les quotas, le retry et la sécurité HTML.
 
 ---
 

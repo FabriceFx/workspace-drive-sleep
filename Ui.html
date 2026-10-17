@@ -572,17 +572,18 @@
   </dialog>
 
   <script>
-    let langueCourante = '<?= langueInitiale ?>' || 'fr';
-    let etat = { fichiers: [], facteurCo2: 0.2, textes: null };
+    const langueServeur = '<?= langueInitiale ?>';
+    let langueCourante = (langueServeur === 'en' || langueServeur === 'fr') ? langueServeur : 'fr';
+    let etat = { fichiers: [], facteurCo2: 0.2, tailleLot: 100, textes: null };
+    // Aucune présélection : l'action destructive part d'un choix explicite de l'utilisateur.
     let ensembleSelection = new Set();
-    let toutCoche = true;
     let termeFiltre = '';
 
     function initialiser() {
       google.script.run
         .withSuccessHandler((reponse) => {
           etat = reponse;
-          ensembleSelection = new Set(etat.fichiers.map((f) => f.id));
+          ensembleSelection = new Set();
           document.getElementById('skeletonLoader').style.display = 'none';
           afficherInterface();
         })
@@ -657,9 +658,7 @@
       const t = obtenirTextes();
       if (!t) return;
 
-      const unite = t.uniteTaille || 'Mo';
-      const libelleInactif = t.inactifDepuis || 'Inactif depuis :';
-
+      document.documentElement.lang = langueCourante;
       document.getElementById('titreConsole').textContent = '🌱 ' + t.titreConsole;
       document.getElementById('sousTitreConsole').textContent = t.sousTitreConsole;
       document.getElementById('lblFichiers').textContent = t.kpiFichiers;
@@ -699,9 +698,10 @@
       document.getElementById('subFichiers').textContent = `${nbSelectionnes} ${t.kpiSelectionnes || 'sélectionné(s)'}`;
 
       document.getElementById('valVolume').textContent = `${totalMoSelectionne.toFixed(1)} ${unite}`;
-      document.getElementById('subVolume').textContent = `sur un total de ${totalMoGlobal.toFixed(1)} ${unite}`;
+      document.getElementById('subVolume').textContent = `${t.surTotal} ${totalMoGlobal.toFixed(1)} ${unite}`;
 
       document.getElementById('valCarbone').textContent = `${co2Grammes} gCO2e`;
+      document.getElementById('subCarbone').textContent = t.parAnEconomises;
 
       const btnCorbeille = document.getElementById('btnCorbeille');
       const btnListeBlanche = document.getElementById('btnListeBlanche');
@@ -714,24 +714,32 @@
       rendreListe();
     }
 
-    function rendreListe() {
-      const t = obtenirTextes();
-      const conteneur = document.getElementById('listeFichiers');
-      conteneur.textContent = '';
-
-      const fichiersFiltres = etat.fichiers.filter((f) => {
+    /**
+     * Renvoie les fichiers correspondant au filtre courant (ceux affichés à l'écran).
+     * @returns {Array<Object>}
+     */
+    function obtenirFichiersVisibles() {
+      return etat.fichiers.filter((f) => {
         if (!termeFiltre) return true;
         const typeInfo = obtenirInfosTypeFichier(f.mimeType, f.nom);
         const texteRecherche = `${f.nom || ''} ${typeInfo.libelle}`.toLowerCase();
         return texteRecherche.includes(termeFiltre);
       });
+    }
+
+    function rendreListe() {
+      const t = obtenirTextes();
+      const conteneur = document.getElementById('listeFichiers');
+      conteneur.textContent = '';
+
+      const fichiersFiltres = obtenirFichiersVisibles();
 
       if (fichiersFiltres.length === 0) {
         const messageVide = document.createElement('div');
         messageVide.style.padding = '32px 16px';
         messageVide.style.textAlign = 'center';
         messageVide.style.color = 'var(--md-sys-color-on-surface-variant)';
-        messageVide.textContent = etat.fichiers.length === 0 ? t.aucunFichier : 'Aucun fichier ne correspond à votre filtre.';
+        messageVide.textContent = etat.fichiers.length === 0 ? t.aucunFichier : t.aucunResultatFiltre;
         conteneur.appendChild(messageVide);
         return;
       }
@@ -768,7 +776,7 @@
 
         const link = document.createElement('a');
         link.className = 'file-link';
-        link.href = f.url;
+        link.href = /^https:\/\//i.test(f.url || '') ? f.url : '#';
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
         link.textContent = `${typeInfo.icone} ${f.nom || 'Sans titre'}`;
@@ -801,13 +809,20 @@
       });
     }
 
+    /**
+     * Coche ou décoche uniquement les fichiers affichés (respecte le filtre en cours) :
+     * un fichier masqué par le filtre ne peut pas partir à la corbeille à l'insu de l'utilisateur.
+     */
     function toutSelectionner() {
-      toutCoche = !toutCoche;
-      if (toutCoche) {
-        etat.fichiers.forEach((f) => ensembleSelection.add(f.id));
-      } else {
-        ensembleSelection.clear();
-      }
+      const visibles = obtenirFichiersVisibles();
+      const tousCoches = visibles.length > 0 && visibles.every((f) => ensembleSelection.has(f.id));
+      visibles.forEach((f) => {
+        if (tousCoches) {
+          ensembleSelection.delete(f.id);
+        } else {
+          ensembleSelection.add(f.id);
+        }
+      });
       rendreListe();
       recalculerKpi();
     }
@@ -847,35 +862,64 @@
       executerAction('CORBEILLE');
     }
 
+    /**
+     * Envoie la sélection au serveur par lots successifs (limite de 6 min par appel)
+     * et ne retire de la liste que les fichiers réellement traités côté serveur.
+     * @param {string} action 'CORBEILLE' ou 'LISTE_BLANCHE'.
+     */
     function executerAction(action) {
       const ids = Array.from(ensembleSelection);
       if (ids.length === 0) return;
 
       const t = obtenirTextes();
-      definirEtatBoutons(true);
-      afficherMessage(t.traitementEnCours || 'Traitement en cours…', false);
+      const tailleLot = Number(etat.tailleLot) || 100;
+      const lots = [];
+      for (let i = 0; i < ids.length; i += tailleLot) {
+        lots.push(ids.slice(i, i + tailleLot));
+      }
+      const idsTraites = new Set();
+      let nbEchecs = 0;
 
-      google.script.run
-        .withSuccessHandler((res) => {
-          definirEtatBoutons(false);
-          const ensembleTraite = new Set(ids);
-          etat.fichiers = etat.fichiers.filter((f) => !ensembleTraite.has(f.id));
-          ensembleSelection.clear();
-          afficherInterface();
-          const msgSucces = `${t.confirmationSucces} (${res.traites} fichier(s))`;
-          afficherMessage(msgSucces, false);
-        })
-        .withFailureHandler((err) => {
-          definirEtatBoutons(false);
-          afficherMessage((t.erreurServeur || 'Erreur : ') + ' ' + err.message, true);
-        })
-        .traiterDecisionsUtilisateur({ action, idsFichiers: ids });
+      definirEtatBoutons(true);
+
+      const terminer = (erreur) => {
+        definirEtatBoutons(false);
+        etat.fichiers = etat.fichiers.filter((f) => !idsTraites.has(f.id));
+        idsTraites.forEach((id) => ensembleSelection.delete(id));
+        afficherInterface();
+        if (erreur) {
+          afficherMessage(`${t.erreurServeur} ${erreur.message} (${idsTraites.size} ${t.fichiersTraites})`, true);
+        } else if (nbEchecs > 0) {
+          afficherMessage(`${idsTraites.size} ${t.fichiersTraites} · ${nbEchecs} ${t.fichiersNonTraites}`, true);
+        } else {
+          afficherMessage(`${t.confirmationSucces} (${idsTraites.size} ${t.fichiersTraites})`, false);
+        }
+      };
+
+      const envoyerLot = (index) => {
+        if (index >= lots.length) {
+          terminer(null);
+          return;
+        }
+        afficherMessage(`${t.traitementEnCours} (${index + 1}/${lots.length})`, false);
+        google.script.run
+          .withSuccessHandler((res) => {
+            (res.idsTraites || []).forEach((id) => idsTraites.add(id));
+            nbEchecs += (res.idsEchecs || []).length;
+            envoyerLot(index + 1);
+          })
+          .withFailureHandler((err) => terminer(err))
+          .traiterDecisionsUtilisateur({ action, idsFichiers: lots[index] });
+      };
+
+      envoyerLot(0);
     }
 
     function definirEtatBoutons(desactive) {
       document.getElementById('btnCorbeille').disabled = desactive;
       document.getElementById('btnListeBlanche').disabled = desactive;
       document.getElementById('btnTout').disabled = desactive;
+      document.getElementById('inputFiltre').disabled = desactive;
     }
 
     function afficherMessage(texte, estErreur) {

@@ -1,5 +1,7 @@
 /**
  * @fileoverview Points d'entrée principaux (onOpen, doGet, déclencheurs et interface utilisateur).
+ * Projet : Drive Sleep & Green FinOps (workspace-drive-sleep)
+ * Auteur : Fabrice Faucheux (FF Labs - faucheux.bzh)
  */
 
 /**
@@ -7,8 +9,7 @@
  * @param {GoogleAppsScript.Events.SheetsOnOpen} [e]
  */
 function onOpen(e) {
-  const langue = obtenirLangueUtilisateur_();
-  const t = TEXTES_INTERFACE[langue];
+  const t = TEXTES_INTERFACE[obtenirLangueUtilisateur_()];
   SpreadsheetApp.getUi()
     .createMenu(t.titreMenu)
     .addItem(t.menuInitialiser, 'actionMenuInitialiser')
@@ -28,7 +29,7 @@ function onOpen(e) {
  */
 function actionMenuInitialiser() {
   try {
-    initialiserEnvironnement();
+    initialiserEnvironnement({ depuisMenu: true });
     SpreadsheetApp.getActiveSpreadsheet().toast('Les 4 feuilles sont prêtes / All 4 sheets are ready.', '🌱 Drive Sleep', 5);
   } catch (erreur) {
     console.error('Erreur actionMenuInitialiser :', erreur);
@@ -37,12 +38,17 @@ function actionMenuInitialiser() {
 }
 
 /**
- * Action du menu : lance l'audit Drive et affiche le résumé.
+ * Action du menu : lance (ou poursuit) l'audit Drive et affiche le résumé.
  */
 function actionMenuAudit() {
   try {
     const resultat = lancerAuditDrive();
-    const message = `Scannés : ${resultat.fichiersScannes} | Nouveaux dormants : ${resultat.fichiersRetenus}`;
+    if (resultat.dejaEnCours) {
+      SpreadsheetApp.getActiveSpreadsheet().toast('Un audit est déjà en cours d\'exécution. / An audit is already running.', '🌱 Audit Drive', 8);
+      return;
+    }
+    const suite = resultat.reprisePlanifiee ? ' | Suite planifiée automatiquement' : ' | Audit terminé';
+    const message = `Scannés : ${resultat.fichiersScannes} | Nouveaux dormants : ${resultat.fichiersRetenus}${suite}`;
     SpreadsheetApp.getActiveSpreadsheet().toast(message, '🌱 Audit Drive', 8);
   } catch (erreur) {
     console.error('Erreur actionMenuAudit :', erreur);
@@ -55,52 +61,49 @@ function actionMenuAudit() {
  * @param {boolean} [forcerRenvoi=false]
  */
 function actionMenuNotifier(forcerRenvoi = false) {
+  // Défensif : seul un vrai booléen déclenche le renvoi forcé.
+  const forcer = forcerRenvoi === true;
+  const ui = SpreadsheetApp.getUi();
   try {
-    const resultat = envoyerNotificationsProprietaires({ forcerRenvoi });
+    const resultat = envoyerNotificationsProprietaires({ forcerRenvoi: forcer });
 
     if (resultat.emailsEnvoyes > 0) {
-      SpreadsheetApp.getActiveSpreadsheet().toast(
-        `${resultat.emailsEnvoyes} bilan(s) envoyé(s) avec succès.`,
-        '🌱 Notifications',
-        6
-      );
+      const complement = resultat.erreurs.length > 0 ? `\n\n${resultat.erreurs.join('\n')}` : '';
+      if (complement) {
+        ui.alert('🌱 Notifications', `${resultat.emailsEnvoyes} bilan(s) envoyé(s).${complement}`, ui.ButtonSet.OK);
+      } else {
+        SpreadsheetApp.getActiveSpreadsheet().toast(`${resultat.emailsEnvoyes} bilan(s) envoyé(s) avec succès.`, '🌱 Notifications', 6);
+      }
       return;
     }
 
-    if (resultat.erreurs && resultat.erreurs.length > 0) {
-      SpreadsheetApp.getUi().alert(
-        '🌱 Échec d\'envoi d\'e-mail',
-        `Une anomalie a empêché l'envoi :\n\n${resultat.erreurs.join('\n')}`,
-        SpreadsheetApp.getUi().ButtonSet.OK
-      );
+    if (resultat.erreurs.length > 0) {
+      ui.alert('🌱 Échec d\'envoi d\'e-mail', `Une anomalie a empêché l'envoi :\n\n${resultat.erreurs.join('\n')}`, ui.ButtonSet.OK);
       return;
     }
 
     if (resultat.quotaRestant <= 1) {
-      SpreadsheetApp.getUi().alert(
-        '🌱 Quota quotidien atteint',
-        'Le quota quotidien d\'envoi d\'e-mails Google est épuisé (0 restant pour aujourd\'hui). Google réinitialise ce compteur toutes les 24 heures.',
-        SpreadsheetApp.getUi().ButtonSet.OK
-      );
+      ui.alert('🌱 Quota quotidien atteint', 'Le quota quotidien d\'envoi d\'e-mails Google est épuisé. Google réinitialise ce compteur toutes les 24 heures.', ui.ButtonSet.OK);
+      return;
+    }
+
+    if (resultat.nbSansProprietaire > 0) {
+      ui.alert('🌱 Propriétaires manquants', `${resultat.nbSansProprietaire} fichier(s) dormant(s) n'ont pas d'adresse de propriétaire valide dans l'inventaire : aucun bilan ne peut leur être envoyé.`, ui.ButtonSet.OK);
       return;
     }
 
     if (resultat.nbDormants === 0) {
-      if (resultat.nbDejaNotifies > 0 && !forcerRenvoi) {
-        const reponse = SpreadsheetApp.getUi().alert(
+      if (resultat.nbDejaNotifies > 0 && !forcer) {
+        const reponse = ui.alert(
           '🌱 Fichiers déjà notifiés',
           `Aucun nouveau fichier au statut DORMANT.\n\nLes ${resultat.nbDejaNotifies} fichier(s) répertoriés dans l'inventaire ont déjà le statut NOTIFIE.\n\nSouhaitez-vous forcer un renvoi du bilan par e-mail aux propriétaires ?`,
-          SpreadsheetApp.getUi().ButtonSet.YES_NO
+          ui.ButtonSet.YES_NO
         );
-        if (reponse === SpreadsheetApp.getUi().Button.YES) {
+        if (reponse === ui.Button.YES) {
           actionMenuNotifier(true);
         }
       } else {
-        SpreadsheetApp.getUi().alert(
-          '🌱 Aucun fichier à notifier',
-          'Aucun fichier dormant trouvé dans l\'onglet Inventaire_Dormant.\n\nLancez d\'abord l\'audit des fichiers dormants (menu n°2).',
-          SpreadsheetApp.getUi().ButtonSet.OK
-        );
+        ui.alert('🌱 Aucun fichier à notifier', 'Aucun fichier dormant trouvé dans l\'onglet Inventaire_Dormant.\n\nLancez d\'abord l\'audit des fichiers dormants (menu n°2).', ui.ButtonSet.OK);
       }
       return;
     }
@@ -108,12 +111,12 @@ function actionMenuNotifier(forcerRenvoi = false) {
     SpreadsheetApp.getActiveSpreadsheet().toast('Aucun bilan n\'a été envoyé.', '🌱 Notifications', 5);
   } catch (erreur) {
     console.error('Erreur actionMenuNotifier :', erreur);
-    SpreadsheetApp.getUi().alert('🌱 Erreur d\'envoi des notifications', erreur.message, SpreadsheetApp.getUi().ButtonSet.OK);
+    ui.alert('🌱 Erreur d\'envoi des notifications', erreur.message, ui.ButtonSet.OK);
   }
 }
 
 /**
- * Ouvre la console de nettoyage en boîte de dialogue modale élégante dans Google Sheets.
+ * Ouvre la console de nettoyage en boîte de dialogue modale dans Google Sheets.
  */
 function afficherConsoleNettoyage() {
   try {
@@ -138,7 +141,7 @@ function afficherConsoleNettoyage() {
  * @returns {GoogleAppsScript.HTML.HtmlOutput}
  */
 function doGet(e) {
-  const langueParam = (e?.parameter?.lang || '').toLowerCase();
+  const langueParam = String(e?.parameter?.lang || '').toLowerCase();
   const template = HtmlService.createTemplateFromFile('Ui');
   template.langueInitiale = (langueParam === 'en' || langueParam === 'fr') ? langueParam : obtenirLangueUtilisateur_();
   return template.evaluate()
@@ -149,42 +152,37 @@ function doGet(e) {
 
 /**
  * Renvoie les fichiers dormants de l'utilisateur courant pour Ui.html.
- * @returns {Object} Liste des fichiers, KPI globaux et traductions.
+ * Échoue de façon fermée : sans identité, aucun fichier n'est renvoyé.
+ * @returns {Object} Liste des fichiers, facteur CO2, taille de lot et traductions.
  */
 function chargerDonneesConsole() {
-  const classeur = obtenirClasseurMaitre_();
-  const feuilleInv = classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE);
+  const emailActif = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+  if (!emailActif) {
+    throw new Error('Impossible d\'identifier votre compte : la console ne peut pas afficher vos fichiers. / Unable to identify your account.');
+  }
   const config = lireConfiguration();
-  const emailActif = (Session.getActiveUser().getEmail() || '').toLowerCase();
   const fichiers = [];
 
-  const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
-  if (feuilleInv && feuilleInv.getLastRow() >= 2) {
-    const lignes = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, nbColonnes).getValues();
-    lignes.forEach((ligne) => {
-      const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
-      const proprietaire = String(ligne[COLONNES_INVENTAIRE.PROPRIETAIRE] ?? '').trim().toLowerCase();
-      if (statut !== STATUTS_FICHIER.DORMANT && statut !== STATUTS_FICHIER.NOTIFIE) {
-        return;
-      }
-      // Isolation stricte des données : l'utilisateur ne consulte et n'agit que sur ses propres fichiers
-      if (!emailActif || proprietaire === emailActif) {
-        fichiers.push({
-          id: String(ligne[COLONNES_INVENTAIRE.ID]),
-          nom: String(ligne[COLONNES_INVENTAIRE.NOM]),
-          mimeType: String(ligne[COLONNES_INVENTAIRE.MIME_TYPE]),
-          tailleMo: Number(ligne[COLONNES_INVENTAIRE.TAILLE_MO]) || 0,
-          derniereActivite: formaterDateFr_(ligne[COLONNES_INVENTAIRE.DERNIERE_ACTIVITE]),
-          proprietaire: String(ligne[COLONNES_INVENTAIRE.PROPRIETAIRE]),
-          url: String(ligne[COLONNES_INVENTAIRE.URL])
-        });
-      }
+  lireLignesInventaire_().forEach((ligne) => {
+    const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
+    const proprietaire = String(ligne[COLONNES_INVENTAIRE.PROPRIETAIRE] ?? '').trim().toLowerCase();
+    if (statut !== STATUTS_FICHIER.DORMANT && statut !== STATUTS_FICHIER.NOTIFIE) return;
+    if (proprietaire !== emailActif) return;
+    const url = String(ligne[COLONNES_INVENTAIRE.URL] ?? '');
+    fichiers.push({
+      id: String(ligne[COLONNES_INVENTAIRE.ID]),
+      nom: String(ligne[COLONNES_INVENTAIRE.NOM]),
+      mimeType: String(ligne[COLONNES_INVENTAIRE.MIME_TYPE]),
+      tailleMo: Number(ligne[COLONNES_INVENTAIRE.TAILLE_MO]) || 0,
+      derniereActivite: formaterDateFr_(ligne[COLONNES_INVENTAIRE.DERNIERE_ACTIVITE]),
+      url: /^https:\/\//i.test(url) ? url : ''
     });
-  }
+  });
 
   return {
     fichiers,
     facteurCo2: config.FACTEUR_CO2_KG_PAR_GO_AN,
+    tailleLot: config.TAILLE_LOT_DECISIONS,
     textes: TEXTES_INTERFACE
   };
 }
@@ -206,43 +204,67 @@ function afficherAPropos() {
   SpreadsheetApp.getUi().showModalDialog(html, 'À propos / About');
 }
 
+/* ===================== Déclencheurs ===================== */
+
+/**
+ * Cible du déclencheur ponctuel de reprise (fonction distincte du déclencheur mensuel).
+ */
+function reprendreAuditDrive() {
+  lancerAuditDrive();
+}
+
+/**
+ * Cible du déclencheur mensuel : démarre une nouvelle campagne (audit puis bilans e-mail en fin d'audit).
+ * Si une campagne précédente est encore en cours, elle est poursuivie plutôt que réinitialisée.
+ */
+function executerCampagneMensuelle() {
+  PropertiesService.getScriptProperties().setProperty(CLES_PROPRIETES.NOTIFIER_EN_FIN_AUDIT, 'OUI');
+  lancerAuditDrive();
+}
+
 /**
  * Planifie un déclencheur unique de reprise dans 1 minute pour continuer l'audit par lots.
+ * Ne touche jamais au déclencheur mensuel.
  */
 function planifierRepriseAudit_() {
-  supprimerDeclencheursReprise_('lancerAuditDrive');
-  ScriptApp.newTrigger('lancerAuditDrive')
+  supprimerDeclencheursParFonction_(FONCTIONS_DECLENCHEURS.REPRISE_AUDIT);
+  ScriptApp.newTrigger(FONCTIONS_DECLENCHEURS.REPRISE_AUDIT)
     .timeBased()
     .after(60 * 1000)
     .create();
 }
 
 /**
- * Supprime les déclencheurs existants associés à une fonction donnée pour éviter les doublons.
- * @param {string} nomFonction
+ * Supprime les déclencheurs du projet associés à une fonction donnée.
+ * @param {string} nomFonction Nom de la fonction cible.
+ * @returns {number} Nombre de déclencheurs supprimés.
  */
-function supprimerDeclencheursReprise_(nomFonction) {
-  const declencheurs = ScriptApp.getProjectTriggers();
-  declencheurs.forEach((declencheur) => {
+function supprimerDeclencheursParFonction_(nomFonction) {
+  let nbSupprimes = 0;
+  ScriptApp.getProjectTriggers().forEach((declencheur) => {
     if (declencheur.getHandlerFunction() === nomFonction) {
       ScriptApp.deleteTrigger(declencheur);
+      nbSupprimes++;
     }
   });
+  return nbSupprimes;
 }
 
 /**
- * Installe le déclencheur mensuel automatique (le 1er du mois à 7h00) sans créer de doublon.
+ * Installe le déclencheur mensuel automatique (le 1er du mois vers 7h00) sans créer de doublon.
+ * Nettoie au passage les déclencheurs de l'ancienne version (fonction lancerAuditDrive).
  */
 function installerDeclencheurMensuel() {
   try {
-    supprimerDeclencheursReprise_('lancerAuditDrive');
-    ScriptApp.newTrigger('lancerAuditDrive')
+    supprimerDeclencheursParFonction_(FONCTIONS_DECLENCHEURS.CAMPAGNE_MENSUELLE);
+    supprimerDeclencheursParFonction_(FONCTIONS_DECLENCHEURS.ANCIENNE_FONCTION);
+    ScriptApp.newTrigger(FONCTIONS_DECLENCHEURS.CAMPAGNE_MENSUELLE)
       .timeBased()
       .onMonthDay(1)
       .atHour(7)
       .create();
     if (SpreadsheetApp.getActiveSpreadsheet()) {
-      SpreadsheetApp.getActiveSpreadsheet().toast('Déclencheur mensuel activé (le 1er du mois à 07h00).', '🌱 Drive Sleep', 5);
+      SpreadsheetApp.getActiveSpreadsheet().toast('Campagne mensuelle activée (audit + bilans, le 1er du mois vers 07h00).', '🌱 Drive Sleep', 5);
     }
   } catch (erreur) {
     console.error('Erreur installerDeclencheurMensuel :', erreur);

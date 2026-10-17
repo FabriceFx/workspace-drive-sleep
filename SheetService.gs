@@ -1,58 +1,60 @@
 /**
  * @fileoverview Gestion des feuilles Google Sheets, lectures/écritures groupées et KPI.
+ * Projet : Drive Sleep & Green FinOps (workspace-drive-sleep)
+ * Auteur : Fabrice Faucheux (FF Labs - faucheux.bzh)
  */
 
 /**
- * Crée et formate les 4 onglets nécessaires s'ils n'existent pas encore.
- * Supprime l'onglet vierge initial (ex. Feuille 1 / Sheet1) s'il est vide.
- * Enregistre l'ID du classeur maître dans PropertiesService.
+ * Crée et formate les 4 onglets nécessaires s'ils n'existent pas encore
+ * et enregistre l'ID du classeur maître dans PropertiesService.
+ * Les actions visibles (suppression de la feuille vierge, activation du tableau de bord)
+ * ne sont faites qu'à la demande explicite, jamais depuis un déclencheur.
+ * @param {Object} [options]
+ * @param {boolean} [options.depuisMenu=false] Active le nettoyage de la feuille vierge et la navigation.
  */
-function initialiserEnvironnement() {
+function initialiserEnvironnement(options = {}) {
+  const depuisMenu = options && options.depuisMenu === true;
   const classeur = obtenirClasseurMaitre_();
-  PropertiesService.getScriptProperties().setProperty(CLES_PROPRIETES.ID_CLASSEUR_MAITRE, classeur.getId());
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty(CLES_PROPRIETES.ID_CLASSEUR_MAITRE) !== classeur.getId()) {
+    props.setProperty(CLES_PROPRIETES.ID_CLASSEUR_MAITRE, classeur.getId());
+  }
 
   initialiserFeuilleConfiguration_(classeur);
   initialiserFeuilleInventaire_(classeur);
   initialiserFeuilleListeBlanche_(classeur);
   initialiserFeuilleTableauDeBord_(classeur);
 
-  supprimerFeuilleInitialeSiVierge_(classeur);
-
-  mettreAJourTableauDeBord();
-
-  // Activer l'onglet Tableau_de_Bord pour positionner l'utilisateur au bon endroit
-  const feuilleTdb = classeur.getSheetByName(NOMS_FEUILLES.TABLEAU_DE_BORD);
-  if (feuilleTdb) {
-    classeur.setActiveSheet(feuilleTdb);
+  if (depuisMenu) {
+    supprimerFeuilleInitialeSiVierge_(classeur);
+    mettreAJourTableauDeBord();
+    const feuilleTdb = classeur.getSheetByName(NOMS_FEUILLES.TABLEAU_DE_BORD);
+    if (feuilleTdb) {
+      classeur.setActiveSheet(feuilleTdb);
+    }
   }
 
-  console.info('Environnement initialisé avec succès sur le classeur :', classeur.getId());
+  console.info('Environnement vérifié sur le classeur :', classeur.getId());
 }
 
 /**
- * Supprime la feuille vierge initiale (ex. 'Feuille 1' ou 'Sheet1') si elle est inutilisée.
+ * Supprime la feuille par défaut ('Feuille 1', 'Sheet1'…) uniquement si elle est totalement vide.
+ * Une feuille au nom personnalisé n'est jamais supprimée, même vide.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} classeur
  */
 function supprimerFeuilleInitialeSiVierge_(classeur) {
   const feuillesRequises = new Set(Object.values(NOMS_FEUILLES));
-  const toutesFeuilles = classeur.getSheets();
-
-  toutesFeuilles.forEach((feuille) => {
+  classeur.getSheets().forEach((feuille) => {
     const nom = feuille.getName();
-    if (!feuillesRequises.has(nom)) {
-      const derniereLigne = feuille.getLastRow();
-      const derniereCol = feuille.getLastColumn();
-      const estCompletementVide = derniereLigne === 0;
-      const celluleA1Vide = (derniereLigne <= 1 && derniereCol <= 1 && String(feuille.getRange(1, 1).getValue() ?? '').trim() === '');
-      const estNomParDefaut = /^(feuille\s*\d*|sheet\s*\d*)$/i.test(nom.trim());
-
-      if ((estCompletementVide || celluleA1Vide) && (estNomParDefaut || estCompletementVide)) {
-        try {
-          classeur.deleteSheet(feuille);
-          console.info(`Feuille initiale inutile '${nom}' supprimée.`);
-        } catch (erreur) {
-          console.warn(`Impossible de supprimer la feuille '${nom}' :`, erreur.message);
-        }
+    if (feuillesRequises.has(nom)) return;
+    const estNomParDefaut = /^(feuille|sheet)\s*\d*$/i.test(nom.trim());
+    const estVide = feuille.getLastRow() === 0 && feuille.getLastColumn() === 0;
+    if (estNomParDefaut && estVide && classeur.getSheets().length > 1) {
+      try {
+        classeur.deleteSheet(feuille);
+        console.info(`Feuille initiale vierge '${nom}' supprimée.`);
+      } catch (erreur) {
+        console.warn(`Impossible de supprimer la feuille '${nom}' :`, erreur.message);
       }
     }
   });
@@ -63,47 +65,45 @@ function supprimerFeuilleInitialeSiVierge_(classeur) {
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} classeur
  */
 function initialiserFeuilleConfiguration_(classeur) {
-  let feuille = classeur.getSheetByName(NOMS_FEUILLES.CONFIGURATION);
-  if (!feuille) {
-    feuille = classeur.insertSheet(NOMS_FEUILLES.CONFIGURATION);
-    const donnees = [
-      ['Paramètre / Parameter', 'Valeur / Value', 'Description (FR / EN)'],
-      ['SEUIL_INACTIVITE_MOIS', CONFIGURATION_PAR_DEFAUT.SEUIL_INACTIVITE_MOIS, 'Mois sans modification ni ouverture / Months of inactivity'],
-      ['TAILLE_MIN_MO', CONFIGURATION_PAR_DEFAUT.TAILLE_MIN_MO, 'Taille minimale (Mo) pour fichiers binaires / Min size (MB) for binary files'],
-      ['FACTEUR_CO2_KG_PAR_GO_AN', CONFIGURATION_PAR_DEFAUT.FACTEUR_CO2_KG_PAR_GO_AN, 'Empreinte carbone (kgCO2e / Go / an) / Carbon factor (kgCO2e / GB / year)'],
-      ['COUT_GO_ANNUEL_EUR', CONFIGURATION_PAR_DEFAUT.COUT_GO_ANNUEL_EUR, 'Coût financier estimé (€ / Go / an) / Storage cost (EUR / GB / year)'],
-      ['INCLURE_FICHIERS_NATIFS', CONFIGURATION_PAR_DEFAUT.INCLURE_FICHIERS_NATIFS, 'Inclure Docs/Sheets/Slides sur l\'ancienneté (OUI/NON) / Include native files'],
-      ['POIDS_ESTIME_NATIF_MO', CONFIGURATION_PAR_DEFAUT.POIDS_ESTIME_NATIF_MO, 'Poids forfaitaire estimé (Mo) d\'un fichier natif / Estimated native file weight (MB)']
-    ];
-    feuille.getRange(1, 1, donnees.length, 3).setValues(donnees);
-    feuille.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#e8f0fe');
-    feuille.setFrozenRows(1);
-    feuille.autoResizeColumns(1, 3);
-  }
+  if (classeur.getSheetByName(NOMS_FEUILLES.CONFIGURATION)) return;
+  const feuille = classeur.insertSheet(NOMS_FEUILLES.CONFIGURATION);
+  const donnees = [
+    ['Paramètre / Parameter', 'Valeur / Value', 'Description (FR / EN)'],
+    ['SEUIL_INACTIVITE_MOIS', CONFIGURATION_PAR_DEFAUT.SEUIL_INACTIVITE_MOIS, 'Mois sans modification ni ouverture (min. 1) / Months of inactivity (min. 1)'],
+    ['TAILLE_MIN_MO', CONFIGURATION_PAR_DEFAUT.TAILLE_MIN_MO, 'Taille minimale (Mo) pour fichiers binaires / Min size (MB) for binary files'],
+    ['FACTEUR_CO2_KG_PAR_GO_AN', CONFIGURATION_PAR_DEFAUT.FACTEUR_CO2_KG_PAR_GO_AN, 'Empreinte carbone (kgCO2e / Go / an) / Carbon factor (kgCO2e / GB / year)'],
+    ['COUT_GO_ANNUEL_EUR', CONFIGURATION_PAR_DEFAUT.COUT_GO_ANNUEL_EUR, 'Coût financier estimé (€ / Go / an) / Storage cost (EUR / GB / year)'],
+    ['INCLURE_FICHIERS_NATIFS', CONFIGURATION_PAR_DEFAUT.INCLURE_FICHIERS_NATIFS, 'Inclure Docs/Sheets/Slides sur l\'ancienneté (OUI/NON) / Include native files (OUI/NON)'],
+    ['POIDS_ESTIME_NATIF_MO', CONFIGURATION_PAR_DEFAUT.POIDS_ESTIME_NATIF_MO, 'Poids de repli (Mo) si Drive ne renvoie pas quotaBytesUsed / Fallback weight (MB)']
+  ];
+  feuille.getRange(1, 1, donnees.length, 3).setValues(donnees);
+  feuille.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#e8f0fe');
+  feuille.setFrozenRows(1);
+  feuille.autoResizeColumns(1, 3);
 }
 
 /**
- * Initialise la feuille Inventaire_Dormant.
+ * Initialise la feuille Inventaire_Dormant (dates stockées en vraies dates, formatées JJ/MM/AAAA).
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} classeur
  */
 function initialiserFeuilleInventaire_(classeur) {
-  let feuille = classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE);
-  if (!feuille) {
-    feuille = classeur.insertSheet(NOMS_FEUILLES.INVENTAIRE);
-    const enTetes = [[
-      'ID_Fichier',
-      'Nom',
-      'Type_MIME',
-      'Taille_Mo',
-      'Derniere_Activite',
-      'Proprietaire',
-      'URL',
-      'Statut',
-      'Date_Traitement'
-    ]];
-    feuille.getRange(1, 1, 1, enTetes[0].length).setValues(enTetes).setFontWeight('bold').setBackground('#fce8e6');
-    feuille.setFrozenRows(1);
-  }
+  if (classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE)) return;
+  const feuille = classeur.insertSheet(NOMS_FEUILLES.INVENTAIRE);
+  const enTetes = [[
+    'ID_Fichier',
+    'Nom',
+    'Type_MIME',
+    'Taille_Mo',
+    'Derniere_Activite',
+    'Proprietaire',
+    'URL',
+    'Statut',
+    'Date_Traitement'
+  ]];
+  feuille.getRange(1, 1, 1, enTetes[0].length).setValues(enTetes).setFontWeight('bold').setBackground('#fce8e6');
+  feuille.getRange('E:E').setNumberFormat('dd/MM/yyyy');
+  feuille.getRange('I:I').setNumberFormat('dd/MM/yyyy');
+  feuille.setFrozenRows(1);
 }
 
 /**
@@ -111,13 +111,12 @@ function initialiserFeuilleInventaire_(classeur) {
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} classeur
  */
 function initialiserFeuilleListeBlanche_(classeur) {
-  let feuille = classeur.getSheetByName(NOMS_FEUILLES.LISTE_BLANCHE);
-  if (!feuille) {
-    feuille = classeur.insertSheet(NOMS_FEUILLES.LISTE_BLANCHE);
-    const enTetes = [['ID_Fichier_ou_Dossier', 'Nom', 'Proprietaire', 'Date_Ajout', 'Motif']];
-    feuille.getRange(1, 1, 1, enTetes[0].length).setValues(enTetes).setFontWeight('bold').setBackground('#e6f4ea');
-    feuille.setFrozenRows(1);
-  }
+  if (classeur.getSheetByName(NOMS_FEUILLES.LISTE_BLANCHE)) return;
+  const feuille = classeur.insertSheet(NOMS_FEUILLES.LISTE_BLANCHE);
+  const enTetes = [['ID_Fichier_ou_Dossier', 'Nom', 'Proprietaire', 'Date_Ajout', 'Motif']];
+  feuille.getRange(1, 1, 1, enTetes[0].length).setValues(enTetes).setFontWeight('bold').setBackground('#e6f4ea');
+  feuille.getRange('D:D').setNumberFormat('dd/MM/yyyy');
+  feuille.setFrozenRows(1);
 }
 
 /**
@@ -125,69 +124,75 @@ function initialiserFeuilleListeBlanche_(classeur) {
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} classeur
  */
 function initialiserFeuilleTableauDeBord_(classeur) {
-  let feuille = classeur.getSheetByName(NOMS_FEUILLES.TABLEAU_DE_BORD);
-  if (!feuille) {
-    feuille = classeur.insertSheet(NOMS_FEUILLES.TABLEAU_DE_BORD);
-    const fuseau = Session.getScriptTimeZone() || 'Europe/Paris';
-    const horodatageInitial = Utilities.formatDate(new Date(), fuseau, 'dd/MM/yyyy HH:mm');
-    const lignes = [
-      ['Indicateur / KPI (Green IT & FinOps)', 'Valeur / Value', 'Unité / Unit'],
-      ['Fichiers dormants actifs (DORMANT / NOTIFIE)', 0, 'fichiers / files'],
-      ['Fichiers mis en sommeil (CORBEILLE)', 0, 'fichiers / files'],
-      ['Fichiers protégés (LISTE_BLANCHE)', 0, 'fichiers / files'],
-      ['Volume dormant identifié (non nettoyé)', 0, 'Go / GB'],
-      ['Volume total libéré (mis à la corbeille)', 0, 'Go / GB'],
-      ['Empreinte carbone évitée', 0, 'kgCO2e / an'],
-      ['Économie FinOps estimée', 0, '€ / an'],
-      ['Dernière mise à jour', horodatageInitial, 'JJ/MM/AAAA HH:mm']
-    ];
-    feuille.getRange(1, 1, lignes.length, 3).setValues(lignes);
-    feuille.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#e6f4ea');
-    feuille.setFrozenRows(1);
-    feuille.autoResizeColumns(1, 3);
-  }
+  if (classeur.getSheetByName(NOMS_FEUILLES.TABLEAU_DE_BORD)) return;
+  const feuille = classeur.insertSheet(NOMS_FEUILLES.TABLEAU_DE_BORD);
+  const lignes = [
+    ['Indicateur / KPI (Green IT & FinOps)', 'Valeur / Value', 'Unité / Unit'],
+    ['Fichiers dormants actifs (DORMANT / NOTIFIE)', 0, 'fichiers / files'],
+    ['Fichiers mis en sommeil (CORBEILLE)', 0, 'fichiers / files'],
+    ['Fichiers protégés (LISTE_BLANCHE)', 0, 'fichiers / files'],
+    ['Volume dormant identifié (non nettoyé)', 0, 'Go / GB'],
+    ['Volume mis à la corbeille (libéré sous 30 j)', 0, 'Go / GB'],
+    ['Empreinte carbone évitée', 0, 'kgCO2e / an'],
+    ['Économie FinOps estimée', 0, '€ / an'],
+    ['Dernière mise à jour', new Date(), 'JJ/MM/AAAA HH:mm']
+  ];
+  feuille.getRange(1, 1, lignes.length, 3).setValues(lignes);
+  feuille.getRange(9, 2).setNumberFormat('dd/MM/yyyy HH:mm');
+  feuille.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#e6f4ea');
+  feuille.setFrozenRows(1);
+  feuille.autoResizeColumns(1, 3);
 }
 
 /**
- * Charge l'ensemble des ID présents dans la Liste_Blanche sous forme de Set.
+ * Lit la première colonne (ID) d'une feuille sous forme de Set.
+ * @param {string} nomFeuille Nom de la feuille.
+ * @returns {Set<string>} Ensemble des ID non vides.
+ */
+function lireIdsFeuille_(nomFeuille) {
+  const feuille = obtenirClasseurMaitre_().getSheetByName(nomFeuille);
+  const ensemble = new Set();
+  if (!feuille || feuille.getLastRow() < 2) {
+    return ensemble;
+  }
+  feuille.getRange(2, 1, feuille.getLastRow() - 1, 1).getValues().forEach(([id]) => {
+    const idNettoye = String(id ?? '').trim();
+    if (idNettoye) ensemble.add(idNettoye);
+  });
+  return ensemble;
+}
+
+/**
+ * Charge l'ensemble des ID présents dans la Liste_Blanche.
  * @returns {Set<string>} Ensemble des ID protégés.
  */
 function chargerIdsListeBlanche_() {
-  const classeur = obtenirClasseurMaitre_();
-  const feuille = classeur.getSheetByName(NOMS_FEUILLES.LISTE_BLANCHE);
-  const ensemble = new Set();
-  if (!feuille || feuille.getLastRow() < 2) {
-    return ensemble;
-  }
-  const valeurs = feuille.getRange(2, 1, feuille.getLastRow() - 1, 1).getValues();
-  valeurs.forEach(([id]) => {
-    const idNettoye = String(id ?? '').trim();
-    if (idNettoye) ensemble.add(idNettoye);
-  });
-  return ensemble;
+  return lireIdsFeuille_(NOMS_FEUILLES.LISTE_BLANCHE);
 }
 
 /**
- * Charge l'ensemble des ID déjà répertoriés dans Inventaire_Dormant pour garantir l'idempotence.
+ * Charge l'ensemble des ID déjà répertoriés dans Inventaire_Dormant (idempotence de l'audit).
  * @returns {Set<string>} Ensemble des ID déjà inventoriés.
  */
 function chargerIdsInventaireExistants_() {
-  const classeur = obtenirClasseurMaitre_();
-  const feuille = classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE);
-  const ensemble = new Set();
-  if (!feuille || feuille.getLastRow() < 2) {
-    return ensemble;
-  }
-  const valeurs = feuille.getRange(2, 1, feuille.getLastRow() - 1, 1).getValues();
-  valeurs.forEach(([id]) => {
-    const idNettoye = String(id ?? '').trim();
-    if (idNettoye) ensemble.add(idNettoye);
-  });
-  return ensemble;
+  return lireIdsFeuille_(NOMS_FEUILLES.INVENTAIRE);
 }
 
 /**
- * Ajoute un lot de fichiers dormants dans la feuille Inventaire_Dormant en une seule écriture.
+ * Lit toutes les lignes de l'inventaire (sans l'en-tête).
+ * @returns {Array<Array<*>>} Lignes de l'inventaire.
+ */
+function lireLignesInventaire_() {
+  const feuille = obtenirClasseurMaitre_().getSheetByName(NOMS_FEUILLES.INVENTAIRE);
+  if (!feuille || feuille.getLastRow() < 2) {
+    return [];
+  }
+  const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
+  return feuille.getRange(2, 1, feuille.getLastRow() - 1, nbColonnes).getValues();
+}
+
+/**
+ * Ajoute un lot de fichiers dormants dans Inventaire_Dormant en une seule écriture.
  * Protégé par LockService.
  * @param {Array<Array<*>>} nouvellesLignes Tableau 2D de lignes à insérer.
  * @returns {number} Nombre de lignes insérées.
@@ -197,18 +202,57 @@ function enregistrerLotInventaire_(nouvellesLignes) {
     return 0;
   }
   const verrou = LockService.getScriptLock();
-  if (!verrou.tryLock(15000)) {
+  if (!verrou.tryLock(30000)) {
     throw new Error('Impossible d\'acquérir le verrou d\'écriture sur l\'inventaire.');
   }
   try {
-    const classeur = obtenirClasseurMaitre_();
-    const feuille = classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE);
-    const ligneDepart = feuille.getLastRow() + 1;
-    feuille.getRange(ligneDepart, 1, nouvellesLignes.length, 9).setValues(nouvellesLignes);
+    const feuille = obtenirClasseurMaitre_().getSheetByName(NOMS_FEUILLES.INVENTAIRE);
+    const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
+    feuille.getRange(feuille.getLastRow() + 1, 1, nouvellesLignes.length, nbColonnes).setValues(nouvellesLignes);
+    SpreadsheetApp.flush();
     return nouvellesLignes.length;
   } finally {
     verrou.releaseLock();
   }
+}
+
+/**
+ * Met à jour le statut (et éventuellement la date de traitement) de lignes identifiées par leur ID.
+ * Relit la feuille sous verrou et n'écrit que les colonnes Statut et Date_Traitement :
+ * aucune écriture concurrente (audit, autre utilisateur) n'est écrasée.
+ * L'appelant doit détenir le verrou de script.
+ * @param {Map<string, {statut: string, date?: Date}>} majParId Mises à jour indexées par ID.
+ * @param {string[]} statutsModifiables Statuts actuels autorisés à être remplacés.
+ * @returns {Set<string>} ID effectivement mis à jour.
+ */
+function appliquerStatutsParId_(majParId, statutsModifiables) {
+  const idsMisAJour = new Set();
+  const feuille = obtenirClasseurMaitre_().getSheetByName(NOMS_FEUILLES.INVENTAIRE);
+  if (!feuille || feuille.getLastRow() < 2 || majParId.size === 0) {
+    return idsMisAJour;
+  }
+  const nbLignes = feuille.getLastRow() - 1;
+  const ids = feuille.getRange(2, COLONNES_INVENTAIRE.ID + 1, nbLignes, 1).getValues();
+  const plageStatuts = feuille.getRange(2, COLONNES_INVENTAIRE.STATUT + 1, nbLignes, 2);
+  const statuts = plageStatuts.getValues();
+
+  ids.forEach(([id], index) => {
+    const idNettoye = String(id ?? '').trim();
+    const maj = majParId.get(idNettoye);
+    if (!maj) return;
+    const statutActuel = String(statuts[index][0] ?? '').trim();
+    if (!statutsModifiables.includes(statutActuel)) return;
+    statuts[index][0] = maj.statut;
+    if (maj.date) {
+      statuts[index][1] = maj.date;
+    }
+    idsMisAJour.add(idNettoye);
+  });
+
+  if (idsMisAJour.size > 0) {
+    plageStatuts.setValues(statuts);
+  }
+  return idsMisAJour;
 }
 
 /**
@@ -217,7 +261,6 @@ function enregistrerLotInventaire_(nouvellesLignes) {
  */
 function mettreAJourTableauDeBord() {
   const classeur = obtenirClasseurMaitre_();
-  const feuilleInv = classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE);
   const feuilleTdb = classeur.getSheetByName(NOMS_FEUILLES.TABLEAU_DE_BORD);
   const config = lireConfiguration();
 
@@ -227,30 +270,24 @@ function mettreAJourTableauDeBord() {
   let moDormants = 0;
   let moLiberes = 0;
 
-  const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
-  if (feuilleInv && feuilleInv.getLastRow() >= 2) {
-    const donnees = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, nbColonnes).getValues();
-    donnees.forEach((ligne) => {
-      const tailleMo = Number(ligne[COLONNES_INVENTAIRE.TAILLE_MO]) || 0;
-      const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
-      if (statut === STATUTS_FICHIER.DORMANT || statut === STATUTS_FICHIER.NOTIFIE) {
-        nbDormants++;
-        moDormants += tailleMo;
-      } else if (statut === STATUTS_FICHIER.CORBEILLE) {
-        nbCorbeille++;
-        moLiberes += tailleMo;
-      } else if (statut === STATUTS_FICHIER.LISTE_BLANCHE) {
-        nbListeBlanche++;
-      }
-    });
-  }
+  lireLignesInventaire_().forEach((ligne) => {
+    const tailleMo = Number(ligne[COLONNES_INVENTAIRE.TAILLE_MO]) || 0;
+    const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
+    if (statut === STATUTS_FICHIER.DORMANT || statut === STATUTS_FICHIER.NOTIFIE) {
+      nbDormants++;
+      moDormants += tailleMo;
+    } else if (statut === STATUTS_FICHIER.CORBEILLE) {
+      nbCorbeille++;
+      moLiberes += tailleMo;
+    } else if (statut === STATUTS_FICHIER.LISTE_BLANCHE) {
+      nbListeBlanche++;
+    }
+  });
 
   const goDormants = Number((moDormants / 1024).toFixed(3));
   const goLiberes = Number((moLiberes / 1024).toFixed(3));
   const co2EviteKg = Number((goLiberes * config.FACTEUR_CO2_KG_PAR_GO_AN).toFixed(3));
   const economieEur = Number((goLiberes * config.COUT_GO_ANNUEL_EUR).toFixed(2));
-  const fuseau = Session.getScriptTimeZone() || 'Europe/Paris';
-  const horodatage = Utilities.formatDate(new Date(), fuseau, 'dd/MM/yyyy HH:mm');
 
   if (feuilleTdb) {
     const valeursMaj = [
@@ -261,7 +298,7 @@ function mettreAJourTableauDeBord() {
       [goLiberes],
       [co2EviteKg],
       [economieEur],
-      [horodatage]
+      [new Date()]
     ];
     feuilleTdb.getRange(2, 2, valeursMaj.length, 1).setValues(valeursMaj);
   }
