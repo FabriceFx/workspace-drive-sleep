@@ -123,8 +123,8 @@ function afficherConsoleNettoyage() {
     template.langueInitiale = langue;
     const html = template.evaluate()
       .setTitle(`🌱 ${t.titreConsole}`)
-      .setWidth(880)
-      .setHeight(680);
+      .setWidth(920)
+      .setHeight(700);
     SpreadsheetApp.getUi().showModalDialog(html, `🌱 ${t.titreConsole}`);
   } catch (erreur) {
     console.error('Erreur afficherConsoleNettoyage :', erreur);
