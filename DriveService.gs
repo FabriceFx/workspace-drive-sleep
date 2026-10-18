@@ -29,6 +29,9 @@ function evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, cont
   if (!fichier || !fichier.id || idsExclus.has(fichier.id)) {
     return null;
   }
+  if (fichier.trashed === true || fichier.explicitlyTrashed === true) {
+    return null;
+  }
   if (fichier.mimeType === TYPE_MIME_DOSSIER) {
     return null;
   }
@@ -117,6 +120,41 @@ function construireVerificateurDossiersProteges_(idsListeBlanche) {
 }
 
 /**
+ * Construit un vérificateur « ce fichier est-il sous un dossier placé à la corbeille ? »
+ * qui remonte toute l'arborescence parente avec un cache mémoire.
+ * @returns {function(Object): boolean}
+ */
+function construireVerificateurDossiersCorbeille_() {
+  const cacheCorbeille = new Map(); // idDossier -> boolean (dans la corbeille ou non)
+
+  const estDossierCorbeille = (idDossier, profondeur) => {
+    if (cacheCorbeille.has(idDossier)) return cacheCorbeille.get(idDossier);
+    if (profondeur >= PROFONDEUR_MAX_ARBORESCENCE) return false;
+    cacheCorbeille.set(idDossier, false); // garde-fou contre les cycles
+    let estCorbeille = false;
+    let parents = [];
+    try {
+      const meta = executerAvecRetry_(() => Drive.Files.get(idDossier, { fields: 'trashed, parents', supportsAllDrives: true }));
+      if (meta && meta.trashed === true) {
+        estCorbeille = true;
+      } else {
+        parents = (meta && meta.parents) || [];
+      }
+    } catch (erreur) {
+      console.warn(`Statut du dossier ${idDossier} inaccessible :`, erreur.message);
+    }
+    const resultat = estCorbeille || parents.some((idParent) => estDossierCorbeille(idParent, profondeur + 1));
+    cacheCorbeille.set(idDossier, resultat);
+    return resultat;
+  };
+
+  return (fichier) => {
+    if (!fichier || !Array.isArray(fichier.parents) || fichier.parents.length === 0) return false;
+    return fichier.parents.some((idParent) => estDossierCorbeille(idParent, 0));
+  };
+}
+
+/**
  * Pose un verrou logique d'audit (propriété horodatée) pour empêcher deux audits simultanés
  * (déclencheur de reprise + lancement manuel) sans bloquer les autres utilisateurs pendant 4 min.
  * @returns {boolean} true si le verrou a été obtenu.
@@ -192,11 +230,13 @@ function executerCycleAudit_() {
   const horodatageDebut = Date.now();
   const props = PropertiesService.getScriptProperties();
   initialiserEnvironnement();
+  synchroniserStatutsCorbeilleInventaire_();
   const config = lireConfiguration();
 
   const idsListeBlanche = chargerIdsListeBlanche_();
   const idsExclus = new Set([...idsListeBlanche, ...chargerIdsInventaireExistants_()]);
   const estSousDossierProtege = construireVerificateurDossiersProteges_(idsListeBlanche);
+  const estDansDossierCorbeille = construireVerificateurDossiersCorbeille_();
   const contexte = {
     fuseau: obtenirFuseau_(),
     emailParDefaut: (Session.getEffectiveUser().getEmail() || '').toLowerCase()
@@ -218,7 +258,7 @@ function executerCycleAudit_() {
     const parametresRequete = {
       q: requeteDrive,
       pageSize: config.TAILLE_PAGE_DRIVE,
-      fields: 'nextPageToken, files(id, name, mimeType, size, quotaBytesUsed, modifiedTime, viewedByMeTime, owners(emailAddress), webViewLink, parents, shared, properties, appProperties)',
+      fields: 'nextPageToken, files(id, name, mimeType, size, quotaBytesUsed, modifiedTime, viewedByMeTime, owners(emailAddress), webViewLink, parents, shared, properties, appProperties, trashed, explicitlyTrashed)',
       includeItemsFromAllDrives: false,
       supportsAllDrives: true
     };
@@ -245,7 +285,7 @@ function executerCycleAudit_() {
     fichiers.forEach((fichier) => {
       if (estFichierGarde_(fichier)) return; // gardé par son propriétaire depuis la console
       const candidat = evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, contexte);
-      if (!candidat || estSousDossierProtege(fichier)) return;
+      if (!candidat || estSousDossierProtege(fichier) || estDansDossierCorbeille(fichier)) return;
       idsExclus.add(candidat.id);
       const nouvelleLigne = [];
       nouvelleLigne[COLONNES_INVENTAIRE.ID] = candidat.id;

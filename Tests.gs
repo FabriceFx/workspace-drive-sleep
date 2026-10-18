@@ -27,7 +27,8 @@ function runAllTests() {
     test_CA07_marqueurGarder,
     test_CA07_dateLimiteClientValidee,
     test_CA08_dateLimiteFinDeMois,
-    test_CA08_fichierPartageSignale
+    test_CA08_fichierPartageSignale,
+    test_CA09_fichierCorbeilleExclu
   ];
 
   let reussis = 0;
@@ -210,4 +211,14 @@ function test_CA08_fichierPartageSignale() {
   const fichier = { id: 'id_partage', name: 'ref.pdf', mimeType: 'application/pdf', size: String(10 * 1024 * 1024), modifiedTime: '2022-01-01T00:00:00Z', shared: true };
   const resultat = evaluerEligibiliteFichier_(fichier, config, dateLimite, new Set(), CONTEXTE_TEST_);
   affirmer_(resultat !== null && resultat.partage === true, 'Un fichier partagé doit être signalé comme tel.');
+}
+
+function test_CA09_fichierCorbeilleExclu() {
+  const config = { ...CONFIGURATION_PAR_DEFAUT };
+  const dateLimite = new Date('2025-10-01T00:00:00Z');
+  const fichierCorbeille = { id: 'id_corb', name: 'vieux.pdf', mimeType: 'application/pdf', size: String(10 * 1024 * 1024), modifiedTime: '2022-01-01T00:00:00Z', trashed: true };
+  affirmer_(evaluerEligibiliteFichier_(fichierCorbeille, config, dateLimite, new Set(), CONTEXTE_TEST_) === null, 'Un fichier avec trashed: true doit être exclu.');
+
+  const fichierExplicitCorbeille = { id: 'id_exp', name: 'vieux2.pdf', mimeType: 'application/pdf', size: String(10 * 1024 * 1024), modifiedTime: '2022-01-01T00:00:00Z', explicitlyTrashed: true };
+  affirmer_(evaluerEligibiliteFichier_(fichierExplicitCorbeille, config, dateLimite, new Set(), CONTEXTE_TEST_) === null, 'Un fichier avec explicitlyTrashed: true doit être exclu.');
 }

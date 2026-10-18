@@ -49,6 +49,7 @@ function analyserMonDrive(parametres) {
   const config = lireConfiguration();
   const idsProteges = chargerIdsListeBlanche_();
   const estSousDossierProtege = construireVerificateurDossiersProteges_(idsProteges);
+  const estDansDossierCorbeille = construireVerificateurDossiersCorbeille_();
   const contexte = {
     fuseau: obtenirFuseau_(),
     emailParDefaut: (Session.getEffectiveUser().getEmail() || '').toLowerCase()
@@ -70,7 +71,7 @@ function analyserMonDrive(parametres) {
     const options = {
       q: requete,
       pageSize: config.TAILLE_PAGE_DRIVE,
-      fields: 'nextPageToken, files(id, name, mimeType, size, quotaBytesUsed, modifiedTime, viewedByMeTime, owners(emailAddress), webViewLink, parents, shared, properties, appProperties)',
+      fields: 'nextPageToken, files(id, name, mimeType, size, quotaBytesUsed, modifiedTime, viewedByMeTime, owners(emailAddress), webViewLink, parents, shared, properties, appProperties, trashed, explicitlyTrashed)',
       includeItemsFromAllDrives: false,
       supportsAllDrives: true
     };
@@ -81,7 +82,7 @@ function analyserMonDrive(parametres) {
       scannes++;
       if (estFichierGarde_(fichier)) return;
       const candidat = evaluerEligibiliteFichier_(fichier, config, dateLimite, idsProteges, contexte);
-      if (!candidat || estSousDossierProtege(fichier)) return;
+      if (!candidat || estSousDossierProtege(fichier) || estDansDossierCorbeille(fichier)) return;
       fichiers.push({
         id: candidat.id,
         nom: candidat.nom,
@@ -194,11 +195,14 @@ function appliquerSurMesFichiers_(ids, etatAttendu, operation) {
         fields: 'id, ownedByMe, trashed, size, quotaBytesUsed',
         supportsAllDrives: true
       }));
-      if (!meta.ownedByMe || Boolean(meta.trashed) !== etatAttendu.trashed) {
+      if (!meta.ownedByMe) {
         idsEchecs.push(id);
         return;
       }
-      executerAvecRetry_(() => operation(id));
+      const dejaEnEtat = Boolean(meta.trashed) !== etatAttendu.trashed;
+      if (!dejaEnEtat) {
+        executerAvecRetry_(() => operation(id));
+      }
       const octets = Number(meta.quotaBytesUsed !== undefined ? meta.quotaBytesUsed : meta.size) || 0;
       taillesMo.set(id, octets / (1024 * 1024));
       idsTraites.push(id);

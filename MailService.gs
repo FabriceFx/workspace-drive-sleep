@@ -16,6 +16,7 @@ const DUREE_MAX_ENVOI_MS = 270000;
  */
 function envoyerNotificationsProprietaires(options = {}) {
   exigerAdministrateur_();
+  synchroniserStatutsCorbeilleInventaire_();
   const debut = Date.now();
   const forcerRenvoi = Boolean(options && options.forcerRenvoi === true);
   const config = lireConfiguration();

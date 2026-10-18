@@ -257,12 +257,72 @@ function appliquerStatutsParId_(majParId, statutsModifiables) {
 }
 
 /**
+ * Synchronise l'inventaire avec l'état réel de Google Drive :
+ * vérifie les fichiers actuellement au statut DORMANT ou NOTIFIE
+ * et bascule automatiquement à CORBEILLE ceux qui ont été placés à la corbeille.
+ * @returns {number} Nombre de lignes mises à jour vers CORBEILLE.
+ */
+function synchroniserStatutsCorbeilleInventaire_() {
+  const classeur = obtenirClasseurMaitre_();
+  const feuilleInv = classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE);
+  if (!feuilleInv || feuilleInv.getLastRow() < 2) return 0;
+
+  const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
+  const plage = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, nbColonnes);
+  const lignes = plage.getValues();
+  const idsActifs = new Set();
+
+  lignes.forEach((ligne) => {
+    const id = String(ligne[COLONNES_INVENTAIRE.ID] ?? '').trim();
+    const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
+    if (id && (statut === STATUTS_FICHIER.DORMANT || statut === STATUTS_FICHIER.NOTIFIE)) {
+      idsActifs.add(id);
+    }
+  });
+
+  if (idsActifs.size === 0) return 0;
+
+  const idsEnCorbeille = new Set();
+  try {
+    let jeton = null;
+    do {
+      const options = {
+        q: "trashed = true and 'me' in owners",
+        pageSize: 1000,
+        fields: 'nextPageToken, files(id)',
+        includeItemsFromAllDrives: false,
+        supportsAllDrives: true
+      };
+      if (jeton) options.pageToken = jeton;
+      const reponse = executerAvecRetry_(() => Drive.Files.list(options));
+      (reponse.files || []).forEach((f) => {
+        if (idsActifs.has(f.id)) {
+          idsEnCorbeille.add(f.id);
+        }
+      });
+      jeton = reponse.nextPageToken || null;
+    } while (jeton && idsEnCorbeille.size < idsActifs.size);
+  } catch (erreur) {
+    console.warn('Impossible de synchroniser les fichiers à la corbeille :', erreur.message);
+  }
+
+  if (idsEnCorbeille.size === 0) return 0;
+
+  const maintenant = new Date();
+  const majParId = new Map([...idsEnCorbeille].map((id) => [id, { statut: STATUTS_FICHIER.CORBEILLE, date: maintenant }]));
+  const misAJour = appliquerStatutsParId_(majParId, [STATUTS_FICHIER.DORMANT, STATUTS_FICHIER.NOTIFIE]);
+  console.info(`Inventaire synchronisé : ${misAJour.size} fichier(s) mis à jour au statut CORBEILLE.`);
+  return misAJour.size;
+}
+
+/**
  * Recalcule et met à jour les indicateurs Green IT et FinOps dans Tableau_de_Bord.
  * L'empreinte carbone et l'économie cumulent l'inventaire et les actions faites dans la console.
  * @returns {Object} Résumé des indicateurs calculés.
  */
 function mettreAJourTableauDeBord() {
   exigerAdministrateur_();
+  synchroniserStatutsCorbeilleInventaire_();
   const classeur = obtenirClasseurMaitre_();
   const feuilleTdb = classeur.getSheetByName(NOMS_FEUILLES.TABLEAU_DE_BORD);
   const config = lireConfiguration();

@@ -25,6 +25,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - Date limite calculée sans débordement de fin de mois (`calculerDateLimite_`).
 - Console : une erreur d'analyse n'affiche plus « Bravo, aucun fichier en sommeil » ; un bouton permet de relancer.
 - Console : badge « 👥 Partagé » et avertissement dans la confirmation lorsque des fichiers partagés vont être mis à la corbeille.
+- **Détection des fichiers à la corbeille** : Exclusion stricte des fichiers et des dossiers parents déjà à la corbeille (`trashed`, `explicitlyTrashed` et vérification récursive `estDansDossierCorbeille_`), synchronisation automatique des statuts dans `Inventaire_Dormant` (`synchroniserStatutsCorbeilleInventaire_`) et gestion sans échec des fichiers déjà à la corbeille dans la console.
 - Libellés : « Libéré pendant cette session », FAQ « Garder » et nouvelle question sur les fichiers partagés.
 
 ### Supprimé / Removed
