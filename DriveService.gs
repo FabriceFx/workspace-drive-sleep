@@ -76,6 +76,7 @@ function evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, cont
     nom: fichier.name || 'Sans titre',
     mimeType: fichier.mimeType || 'application/octet-stream',
     tailleMo,
+    partage: Boolean(fichier.shared),
     derniereActiviteDate: derniereActivite,
     derniereActiviteIso: Utilities.formatDate(derniereActivite, ctx.fuseau, 'dd/MM/yyyy'),
     proprietaire: String(emailProprietaire).toLowerCase(),
@@ -150,12 +151,34 @@ function libererVerrouAudit_() {
  * @returns {Object} Bilan (fichiersScannes, fichiersRetenus, reprisePlanifiee, dejaEnCours).
  */
 function lancerAuditDrive() {
+  exigerAdministrateur_();
   if (!acquerirVerrouAudit_()) {
     console.warn('Un audit est déjà en cours : exécution ignorée.');
     return { fichiersScannes: 0, fichiersRetenus: 0, reprisePlanifiee: false, dejaEnCours: true };
   }
+  const props = PropertiesService.getScriptProperties();
   try {
-    return executerCycleAudit_();
+    const resultat = executerCycleAudit_();
+    props.deleteProperty(CLES_PROPRIETES.ECHECS_REPRISE);
+    return resultat;
+  } catch (erreur) {
+    // Une campagne en cours ne doit pas s'arrêter silencieusement sur une erreur transitoire.
+    const campagneEnCours = Boolean(props.getProperty(CLES_PROPRIETES.JETON_PAGE_DRIVE))
+      || props.getProperty(CLES_PROPRIETES.STATUT_CAMPAGNE) === 'EN_COURS'
+      || props.getProperty(CLES_PROPRIETES.NOTIFIER_EN_FIN_AUDIT) === 'OUI';
+    if (campagneEnCours) {
+      const nbEchecs = (Number(props.getProperty(CLES_PROPRIETES.ECHECS_REPRISE)) || 0) + 1;
+      if (nbEchecs <= CONFIGURATION_PAR_DEFAUT.MAX_ECHECS_REPRISE) {
+        props.setProperty(CLES_PROPRIETES.ECHECS_REPRISE, String(nbEchecs));
+        planifierRepriseAudit_();
+        console.warn(`Audit interrompu (${erreur.message}). Reprise ${nbEchecs}/${CONFIGURATION_PAR_DEFAUT.MAX_ECHECS_REPRISE} planifiée.`);
+      } else {
+        props.deleteProperty(CLES_PROPRIETES.ECHECS_REPRISE);
+        props.setProperty(CLES_PROPRIETES.STATUT_CAMPAGNE, 'ECHEC');
+        console.error(`Campagne abandonnée après ${CONFIGURATION_PAR_DEFAUT.MAX_ECHECS_REPRISE} reprises en échec.`);
+      }
+    }
+    throw erreur;
   } finally {
     libererVerrouAudit_();
   }
@@ -182,9 +205,7 @@ function executerCycleAudit_() {
   let jetonPage = props.getProperty(CLES_PROPRIETES.JETON_PAGE_DRIVE) || null;
   let dateLimiteIso = props.getProperty(CLES_PROPRIETES.DATE_LIMITE_AUDIT);
   if (!jetonPage || !dateLimiteIso) {
-    const dateLimiteNouvelle = new Date();
-    dateLimiteNouvelle.setMonth(dateLimiteNouvelle.getMonth() - config.SEUIL_INACTIVITE_MOIS);
-    dateLimiteIso = dateLimiteNouvelle.toISOString();
+    dateLimiteIso = calculerDateLimite_(config.SEUIL_INACTIVITE_MOIS).toISOString();
     jetonPage = null;
   }
   const dateLimite = new Date(dateLimiteIso);
@@ -197,7 +218,7 @@ function executerCycleAudit_() {
     const parametresRequete = {
       q: requeteDrive,
       pageSize: config.TAILLE_PAGE_DRIVE,
-      fields: 'nextPageToken, files(id, name, mimeType, size, quotaBytesUsed, modifiedTime, viewedByMeTime, owners(emailAddress), webViewLink, parents)',
+      fields: 'nextPageToken, files(id, name, mimeType, size, quotaBytesUsed, modifiedTime, viewedByMeTime, owners(emailAddress), webViewLink, parents, shared, properties, appProperties)',
       includeItemsFromAllDrives: false,
       supportsAllDrives: true
     };
@@ -222,6 +243,7 @@ function executerCycleAudit_() {
     fichiersScannes += fichiers.length;
 
     fichiers.forEach((fichier) => {
+      if (estFichierGarde_(fichier)) return; // gardé par son propriétaire depuis la console
       const candidat = evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, contexte);
       if (!candidat || estSousDossierProtege(fichier)) return;
       idsExclus.add(candidat.id);
@@ -262,9 +284,10 @@ function executerCycleAudit_() {
   mettreAJourTableauDeBord();
 
   if (props.getProperty(CLES_PROPRIETES.NOTIFIER_EN_FIN_AUDIT) === 'OUI') {
+    // Envoi dans une exécution séparée : il dispose de ses propres 6 minutes au lieu du reliquat de l'audit.
     props.deleteProperty(CLES_PROPRIETES.NOTIFIER_EN_FIN_AUDIT);
-    const bilanMail = envoyerNotificationsProprietaires();
-    console.info(`Campagne mensuelle : ${bilanMail.emailsEnvoyes} bilan(s) envoyé(s).`);
+    planifierEnvoiBilans_();
+    console.info('Campagne mensuelle : envoi des bilans planifié dans 1 minute.');
   }
 
   console.info(`Audit terminé. Scannés : ${fichiersScannes}, Retenus : ${lignesAInserer.length}`);
@@ -295,108 +318,5 @@ function executerAvecRetry_(operation, maxTentatives = 3, delaiInitialMs = 1000)
       console.warn(`Tentative ${tentative}/${maxTentatives} échouée (${message}). Nouvelle tentative dans ${delai} ms.`);
       Utilities.sleep(delai);
     }
-  }
-}
-
-/**
- * Place une liste de fichiers à la corbeille ou en liste blanche, pour l'utilisateur courant uniquement.
- * Les appels Drive se font hors verrou ; seule la mise à jour de la feuille est verrouillée.
- * @param {Object} payload { action: 'CORBEILLE'|'LISTE_BLANCHE', idsFichiers: string[], motif?: string }
- * @returns {Object} { traites, idsTraites, idsEchecs, action, kpi }
- */
-function traiterDecisionsUtilisateur(payload) {
-  if (!payload || !Array.isArray(payload.idsFichiers) || payload.idsFichiers.length === 0) {
-    throw new Error('Aucun fichier sélectionné.');
-  }
-  const config = lireConfiguration();
-  if (payload.idsFichiers.length > config.TAILLE_LOT_DECISIONS) {
-    throw new Error(`Lot trop volumineux (${payload.idsFichiers.length}). Maximum : ${config.TAILLE_LOT_DECISIONS}.`);
-  }
-  const emailActif = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
-  if (!emailActif) {
-    throw new Error('Identité de l\'utilisateur indisponible : opération refusée.');
-  }
-
-  const action = payload.action === STATUTS_FICHIER.LISTE_BLANCHE
-    ? STATUTS_FICHIER.LISTE_BLANCHE
-    : STATUTS_FICHIER.CORBEILLE;
-  const idsDemandes = new Set(payload.idsFichiers.map((id) => String(id).trim()).filter(Boolean));
-  const statutsActifs = [STATUTS_FICHIER.DORMANT, STATUTS_FICHIER.NOTIFIE];
-
-  // 1. Contrôle d'autorisation côté serveur : seules les lignes actives de l'utilisateur sont traitables.
-  const lignesAutorisees = new Map();
-  lireLignesInventaire_().forEach((ligne) => {
-    const id = String(ligne[COLONNES_INVENTAIRE.ID] ?? '').trim();
-    if (!idsDemandes.has(id)) return;
-    const proprietaire = String(ligne[COLONNES_INVENTAIRE.PROPRIETAIRE] ?? '').trim().toLowerCase();
-    const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
-    if (proprietaire === emailActif && statutsActifs.includes(statut)) {
-      lignesAutorisees.set(id, ligne);
-    }
-  });
-
-  // 2. Appels Drive hors verrou, sous budget de temps.
-  const debut = Date.now();
-  const idsReussis = [];
-  const idsEchecs = [...idsDemandes].filter((id) => !lignesAutorisees.has(id));
-  lignesAutorisees.forEach((ligne, id) => {
-    if (action !== STATUTS_FICHIER.CORBEILLE) {
-      idsReussis.push(id);
-      return;
-    }
-    if ((Date.now() - debut) > config.DUREE_MAX_DECISIONS_MS) {
-      idsEchecs.push(id);
-      return;
-    }
-    try {
-      executerAvecRetry_(() => Drive.Files.update({ trashed: true }, id, null, { supportsAllDrives: true }));
-      idsReussis.push(id);
-    } catch (erreurDrive) {
-      console.warn(`Impossible de placer le fichier ${id} à la corbeille :`, erreurDrive.message);
-      idsEchecs.push(id);
-    }
-  });
-
-  // 3. Mise à jour de la feuille sous verrou court.
-  const verrou = LockService.getScriptLock();
-  if (!verrou.tryLock(30000)) {
-    throw new Error('Serveur occupé, veuillez réessayer dans quelques secondes. Les fichiers déjà mis à la corbeille le restent.');
-  }
-  try {
-    const maintenant = new Date();
-    const majParId = new Map(idsReussis.map((id) => [id, { statut: action, date: maintenant }]));
-    const idsMisAJour = appliquerStatutsParId_(majParId, statutsActifs);
-
-    if (action === STATUTS_FICHIER.LISTE_BLANCHE) {
-      const idsDejaProteges = chargerIdsListeBlanche_();
-      const nouvellesEntrees = [...idsMisAJour]
-        .filter((id) => !idsDejaProteges.has(id))
-        .map((id) => {
-          const ligne = lignesAutorisees.get(id);
-          const entree = [];
-          entree[COLONNES_LISTE_BLANCHE.ID] = id;
-          entree[COLONNES_LISTE_BLANCHE.NOM] = ligne[COLONNES_INVENTAIRE.NOM];
-          entree[COLONNES_LISTE_BLANCHE.PROPRIETAIRE] = ligne[COLONNES_INVENTAIRE.PROPRIETAIRE];
-          entree[COLONNES_LISTE_BLANCHE.DATE_AJOUT] = maintenant;
-          entree[COLONNES_LISTE_BLANCHE.MOTIF] = String(payload.motif || 'Conserver (Validation utilisateur)').slice(0, 200);
-          return entree;
-        });
-      const feuilleLb = obtenirClasseurMaitre_().getSheetByName(NOMS_FEUILLES.LISTE_BLANCHE);
-      if (nouvellesEntrees.length > 0 && feuilleLb) {
-        feuilleLb.getRange(feuilleLb.getLastRow() + 1, 1, nouvellesEntrees.length, Object.keys(COLONNES_LISTE_BLANCHE).length)
-          .setValues(nouvellesEntrees);
-      }
-    }
-
-    const kpi = mettreAJourTableauDeBord();
-    return {
-      traites: idsMisAJour.size,
-      idsTraites: [...idsMisAJour],
-      idsEchecs,
-      action,
-      kpi
-    };
-  } finally {
-    verrou.releaseLock();
   }
 }

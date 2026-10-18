@@ -13,6 +13,7 @@
  * @param {boolean} [options.depuisMenu=false] Active le nettoyage de la feuille vierge et la navigation.
  */
 function initialiserEnvironnement(options = {}) {
+  exigerAdministrateur_();
   const depuisMenu = options && options.depuisMenu === true;
   const classeur = obtenirClasseurMaitre_();
   const props = PropertiesService.getScriptProperties();
@@ -133,8 +134,8 @@ function initialiserFeuilleTableauDeBord_(classeur) {
     ['Fichiers protégés (LISTE_BLANCHE)', 0, 'fichiers / files'],
     ['Volume dormant identifié (non nettoyé)', 0, 'Go / GB'],
     ['Volume mis à la corbeille (libéré sous 30 j)', 0, 'Go / GB'],
-    ['Empreinte carbone évitée', 0, 'kgCO2e / an'],
-    ['Économie FinOps estimée', 0, '€ / an'],
+    ['Empreinte carbone évitée (inventaire + console)', 0, 'kgCO2e / an'],
+    ['Économie FinOps estimée (inventaire + console)', 0, '€ / an'],
     ['Dernière mise à jour', new Date(), 'JJ/MM/AAAA HH:mm']
   ];
   feuille.getRange(1, 1, lignes.length, 3).setValues(lignes);
@@ -257,9 +258,11 @@ function appliquerStatutsParId_(majParId, statutsModifiables) {
 
 /**
  * Recalcule et met à jour les indicateurs Green IT et FinOps dans Tableau_de_Bord.
+ * L'empreinte carbone et l'économie cumulent l'inventaire et les actions faites dans la console.
  * @returns {Object} Résumé des indicateurs calculés.
  */
 function mettreAJourTableauDeBord() {
+  exigerAdministrateur_();
   const classeur = obtenirClasseurMaitre_();
   const feuilleTdb = classeur.getSheetByName(NOMS_FEUILLES.TABLEAU_DE_BORD);
   const config = lireConfiguration();
@@ -284,10 +287,13 @@ function mettreAJourTableauDeBord() {
     }
   });
 
+  const compteurs = lireCompteursLibreService_();
   const goDormants = Number((moDormants / 1024).toFixed(3));
   const goLiberes = Number((moLiberes / 1024).toFixed(3));
-  const co2EviteKg = Number((goLiberes * config.FACTEUR_CO2_KG_PAR_GO_AN).toFixed(3));
-  const economieEur = Number((goLiberes * config.COUT_GO_ANNUEL_EUR).toFixed(2));
+  const goLibreService = Number(((Number(compteurs.moCorbeille) || 0) / 1024).toFixed(3));
+  const goTotal = goLiberes + goLibreService;
+  const co2EviteKg = Number((goTotal * config.FACTEUR_CO2_KG_PAR_GO_AN).toFixed(3));
+  const economieEur = Number((goTotal * config.COUT_GO_ANNUEL_EUR).toFixed(2));
 
   if (feuilleTdb) {
     const valeursMaj = [
@@ -301,6 +307,11 @@ function mettreAJourTableauDeBord() {
       [new Date()]
     ];
     feuilleTdb.getRange(2, 2, valeursMaj.length, 1).setValues(valeursMaj);
+    feuilleTdb.getRange(10, 1, 3, 3).setValues([
+      ['Console : fichiers mis à la corbeille', Number(compteurs.nbCorbeille) || 0, 'fichiers / files'],
+      ['Console : volume mis à la corbeille', goLibreService, 'Go / GB'],
+      ['Console : fichiers gardés', Number(compteurs.nbGardes) || 0, 'fichiers / files']
+    ]);
   }
 
   return {
@@ -309,6 +320,9 @@ function mettreAJourTableauDeBord() {
     nbListeBlanche,
     goDormants,
     goLiberes,
+    goLibreService,
+    nbCorbeilleLibreService: Number(compteurs.nbCorbeille) || 0,
+    nbGardesLibreService: Number(compteurs.nbGardes) || 0,
     co2EviteKg,
     economieEur
   };

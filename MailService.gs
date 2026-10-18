@@ -15,6 +15,7 @@ const DUREE_MAX_ENVOI_MS = 270000;
  *   quotaRestant, proprietairesTrouves, proprietairesRestants, erreurs).
  */
 function envoyerNotificationsProprietaires(options = {}) {
+  exigerAdministrateur_();
   const debut = Date.now();
   const forcerRenvoi = Boolean(options && options.forcerRenvoi === true);
   const config = lireConfiguration();
@@ -111,16 +112,10 @@ function envoyerNotificationsProprietaires(options = {}) {
 }
 
 /**
- * Renvoie l'URL de la console (Web App déployée) ou, à défaut, celle du classeur.
+ * Renvoie l'URL du classeur maître (la console s'ouvre depuis son menu).
  * @returns {string} URL.
  */
 function obtenirUrlConsole_() {
-  try {
-    const url = ScriptApp.getService().getUrl();
-    if (url) return url;
-  } catch (erreur) {
-    console.warn('Web App non déployée, lien vers le classeur utilisé.');
-  }
   return obtenirClasseurMaitre_().getUrl();
 }
 
@@ -169,7 +164,7 @@ function construireMessageBilan_(elements, config, urlConsole) {
         </table>
         ${ligneMasques}
         <div style="margin-top:24px;text-align:center;">
-          <a href="${echapperHtml_(urlConsole)}" style="background:#188038;color:#ffffff;padding:10px 20px;border-radius:4px;text-decoration:none;font-weight:500;display:inline-block;">Ouvrir la console de tri / Open cleanup console</a>
+          <a href="${echapperHtml_(urlConsole)}" style="background:#188038;color:#ffffff;padding:10px 20px;border-radius:4px;text-decoration:none;font-weight:500;display:inline-block;">Ouvrir le classeur (menu 🌱 Sobriété Drive › Console) / Open the sheet</a>
         </div>
         <p style="color:#5f6368;font-size:12px;margin-top:24px;text-align:center;">${echapperHtml_(CONFIGURATION_PAR_DEFAUT.NOM_APPLICATION)} — FF Labs · <a href="${CONFIGURATION_PAR_DEFAUT.SITE_WEB}" style="color:#5f6368;">faucheux.bzh</a></p>
       </div>
@@ -178,7 +173,7 @@ function construireMessageBilan_(elements, config, urlConsole) {
   const texte = '🌱 Bilan de sobriété numérique / Digital Sobriety Digest\n\n' +
     'Bonjour,\n\n' +
     `Nous avons identifié ${elements.length} fichier(s) dormant(s) dans votre Google Drive (${totalMo.toFixed(1)} Mo / ${totalGo} Go), représentant environ ${totalCo2} gCO2e/an.\n\n` +
-    `Ouvrir la console de tri / Open cleanup console : ${urlConsole}\n`;
+    `Ouvrir le classeur, puis menu 🌱 Sobriété Drive > Console / Open the sheet, then the console menu : ${urlConsole}\n`;
 
   return {
     sujet: `🌱 [Sobriété Numérique] ${elements.length} fichier(s) en sommeil (${totalMo.toFixed(1)} Mo)`,

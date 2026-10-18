@@ -10,6 +10,7 @@
  * @returns {{reussis: number, echoues: number, details: string[]}}
  */
 function runAllTests() {
+  exigerAdministrateur_();
   const tests = [
     test_CA01_initialisationFeuilles,
     test_CA02_filtrageFichierBinaireDormant,
@@ -22,7 +23,11 @@ function runAllTests() {
     test_CA05_constantesColonnes,
     test_CA05_declencheursDistincts,
     test_CA06_retryBackoff,
-    test_CA06_retryErreurDefinitive
+    test_CA06_retryErreurDefinitive,
+    test_CA07_marqueurGarder,
+    test_CA07_dateLimiteClientValidee,
+    test_CA08_dateLimiteFinDeMois,
+    test_CA08_fichierPartageSignale
   ];
 
   let reussis = 0;
@@ -178,4 +183,31 @@ function test_CA06_retryErreurDefinitive() {
     // attendu
   }
   affirmer_(compteur === 1, `Une erreur définitive ne doit pas être rejouée (tentatives : ${compteur}).`);
+}
+
+function test_CA07_marqueurGarder() {
+  affirmer_(estFichierGarde_({ properties: { driveSleepConserver: '1' } }) === true, 'Un fichier marqué (properties) doit être reconnu comme gardé.');
+  affirmer_(estFichierGarde_({ appProperties: { driveSleepConserver: '1' } }) === true, 'Un ancien marquage (appProperties) doit rester reconnu.');
+  affirmer_(estFichierGarde_({ appProperties: {} }) === false, 'Un fichier sans marqueur ne doit pas être gardé.');
+  affirmer_(estFichierGarde_({}) === false, 'Un fichier sans appProperties ne doit pas être gardé.');
+}
+
+function test_CA07_dateLimiteClientValidee() {
+  affirmer_(FORMAT_DATE_ISO_STRICT.test(new Date().toISOString()), 'Une date ISO générée par le serveur doit être acceptée.');
+  affirmer_(!FORMAT_DATE_ISO_STRICT.test("2020-01-01T00:00:00Z' or name contains 'x"), 'Une tentative d\'injection dans la requête Drive doit être refusée.');
+}
+
+function test_CA08_dateLimiteFinDeMois() {
+  const limite = calculerDateLimite_(8, new Date(2026, 9, 31, 12, 0, 0)); // 31 octobre 2026 - 8 mois
+  affirmer_(limite.getMonth() === 1 && limite.getDate() === 28, `Attendu 28 février, obtenu : ${limite.getDate()}/${limite.getMonth() + 1}`);
+  const simple = calculerDateLimite_(12, new Date(2026, 9, 15, 12, 0, 0));
+  affirmer_(simple.getFullYear() === 2025 && simple.getMonth() === 9 && simple.getDate() === 15, 'Attendu 15 octobre 2025.');
+}
+
+function test_CA08_fichierPartageSignale() {
+  const config = { ...CONFIGURATION_PAR_DEFAUT };
+  const dateLimite = new Date('2025-10-01T00:00:00Z');
+  const fichier = { id: 'id_partage', name: 'ref.pdf', mimeType: 'application/pdf', size: String(10 * 1024 * 1024), modifiedTime: '2022-01-01T00:00:00Z', shared: true };
+  const resultat = evaluerEligibiliteFichier_(fichier, config, dateLimite, new Set(), CONTEXTE_TEST_);
+  affirmer_(resultat !== null && resultat.partage === true, 'Un fichier partagé doit être signalé comme tel.');
 }

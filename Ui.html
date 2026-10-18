@@ -480,6 +480,40 @@
       .action-buttons .btn { flex: 1; justify-content: center; }
       .list-card { min-height: 320px; }
     }
+
+    /* ===== Console v1.3 : écrans, accueil, progression, annulation, FAQ ===== */
+    .ecran { display: none; }
+    .ecran.actif { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+    .accueil-card, .analyse-card {
+      background: var(--md-sys-color-surface);
+      border-radius: var(--md-sys-shape-corner-large);
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .accueil-card h2, .analyse-card h2 { margin: 0 0 16px; font-family: 'Outfit', sans-serif; font-size: 20px; }
+    .accueil-liste { list-style: none; margin: 0 0 24px; padding: 0; display: grid; gap: 12px; }
+    .accueil-liste li { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; line-height: 1.5; color: var(--md-sys-color-on-surface); }
+    .accueil-liste .puce { font-size: 22px; line-height: 1.2; }
+    .btn-primary {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      font-size: 16px;
+      padding: 12px 28px;
+    }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+    .barre-progression { height: 6px; border-radius: 3px; background: var(--md-sys-color-surface-container-high); overflow: hidden; margin: 16px 0; }
+    .barre-progression span { display: block; height: 100%; width: 40%; background: var(--md-sys-color-primary); border-radius: 3px; animation: glisser 1.4s ease-in-out infinite; }
+    @keyframes glisser { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+    .texte-progression { color: var(--md-sys-color-on-surface-variant); font-size: 14px; margin-bottom: 16px; }
+    .bandeau-continuer { display: none; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-secondary-container); font-size: 14px; }
+    .toast-banner .btn-annuler { margin-left: auto; background: transparent; border: 1px solid currentColor; color: inherit; padding: 4px 14px; border-radius: 16px; cursor: pointer; font-weight: 600; }
+    .faq { background: var(--md-sys-color-surface); border-radius: var(--md-sys-shape-corner-large); padding: 12px 20px; font-size: 14px; }
+    .faq h3 { margin: 4px 0 8px; font-size: 15px; }
+    .faq details { border-top: 1px solid var(--md-sys-color-outline-variant); padding: 8px 0; }
+    .faq summary { cursor: pointer; font-weight: 500; }
+    .faq p { margin: 8px 0 0; color: var(--md-sys-color-on-surface-variant); line-height: 1.5; }
+    .badge-partage { background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
+    #dialogMessage { white-space: pre-line; }
   </style>
 </head>
 <body>
@@ -487,369 +521,477 @@
     <!-- En-tête -->
     <div class="header-card">
       <div class="title-group">
-        <h1 id="titreConsole">🌱 Console de sobriété numérique</h1>
+        <h1 id="titreConsole">🌱</h1>
         <p id="sousTitreConsole"></p>
       </div>
       <button class="lang-chip" id="btnLangue" onclick="basculerLangue()">FR / EN</button>
     </div>
 
-    <!-- Grille KPI Réactive -->
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-header">
-          <span class="kpi-label" id="lblFichiers">Fichiers dormants</span>
-          <span class="kpi-icon">📁</span>
-        </div>
-        <span class="kpi-val" id="valFichiers">0</span>
-        <div class="kpi-sub" id="subFichiers">0 sélectionnés</div>
+    <!-- Écran 1 : accueil -->
+    <section class="ecran actif" id="ecranAccueil">
+      <div class="accueil-card">
+        <h2 id="accueilTitre"></h2>
+        <ul class="accueil-liste">
+          <li><span class="puce">🔍</span><span id="accueilPoint1"></span></li>
+          <li><span class="puce">♻️</span><span id="accueilPoint2"></span></li>
+          <li><span class="puce">🔒</span><span id="accueilPoint3"></span></li>
+        </ul>
+        <button class="btn btn-primary" id="btnAnalyser" onclick="lancerAnalyse(false)"></button>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-header">
-          <span class="kpi-label" id="lblVolume">Volume sélectionné</span>
-          <span class="kpi-icon">💾</span>
-        </div>
-        <span class="kpi-val" id="valVolume">0 Mo</span>
-        <div class="kpi-sub" id="subVolume">sur un total de 0 Mo</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-header">
-          <span class="kpi-label" id="lblCarbone">Impact carbone</span>
-          <span class="kpi-icon">🌍</span>
-        </div>
-        <span class="kpi-val" id="valCarbone">0 gCO2e</span>
-        <div class="kpi-sub" id="subCarbone">par an économisés</div>
-      </div>
-    </div>
+      <div class="faq" id="faqAccueil"></div>
+    </section>
 
-    <!-- Barre d'outils et recherche -->
-    <div class="toolbar-card">
-      <div class="action-buttons">
-        <button class="btn btn-tonal" id="btnTout" onclick="toutSelectionner()">
-          <span>☑️</span><span id="txtBtnTout">Tout cocher</span>
-        </button>
-        <button class="btn btn-danger" id="btnCorbeille" onclick="demanderConfirmationCorbeille()">
-          <span>🗑️</span><span id="txtBtnCorbeille">Mettre à la corbeille</span>
-        </button>
-        <button class="btn btn-secondary" id="btnListeBlanche" onclick="executerAction('LISTE_BLANCHE')">
-          <span>🛡️</span><span id="txtBtnListeBlanche">Conserver</span>
-        </button>
+    <!-- Écran 2 : analyse en cours -->
+    <section class="ecran" id="ecranAnalyse">
+      <div class="analyse-card">
+        <h2 id="analyseTitre"></h2>
+        <div class="barre-progression"><span></span></div>
+        <div class="texte-progression" id="texteProgression"></div>
+        <button class="btn btn-tonal" id="btnArreter" onclick="arreterAnalyse()"></button>
       </div>
-      <div class="search-box">
-        <span class="search-icon">🔍</span>
-        <input type="text" id="inputFiltre" class="search-input" placeholder="Filtrer par nom..." oninput="filtrerFichiers()">
-      </div>
-    </div>
+    </section>
 
-    <!-- Notification / Toast -->
-    <div class="toast-banner" id="messageStatut"></div>
-
-    <!-- Liste des fichiers -->
-    <div class="list-card">
-      <div class="list-scroll" id="listeFichiers">
-        <!-- Skeleton Loader initial -->
-        <div class="skeleton-wrap" id="skeletonLoader">
-          <div class="skeleton-line medium"></div>
-          <div class="skeleton-line short"></div>
-          <div class="skeleton-line"></div>
-          <div class="skeleton-line medium"></div>
-          <div class="skeleton-line short"></div>
+    <!-- Écran 3 : résultats -->
+    <section class="ecran" id="ecranResultats">
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-header"><span class="kpi-label" id="lblFichiers"></span><span class="kpi-icon">🗂️</span></div>
+          <span class="kpi-val" id="valFichiers">0</span>
+          <div class="kpi-sub" id="subFichiers"></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header"><span class="kpi-label" id="lblVolume"></span><span class="kpi-icon">💾</span></div>
+          <span class="kpi-val" id="valVolume">0</span>
+          <div class="kpi-sub" id="subVolume"></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header"><span class="kpi-label" id="lblGain"></span><span class="kpi-icon">🌱</span></div>
+          <span class="kpi-val" id="valGain">0</span>
+          <div class="kpi-sub" id="subGain"></div>
         </div>
       </div>
-    </div>
+
+      <div class="bandeau-continuer" id="bandeauContinuer">
+        <span id="txtAnalyseIncomplete"></span>
+        <button class="btn btn-tonal" id="btnContinuer" onclick="lancerAnalyse(true)"></button>
+      </div>
+
+      <div class="toolbar-card">
+        <div class="action-buttons">
+          <button class="btn btn-tonal" id="btnTout" onclick="toutSelectionner()"><span>☑️</span><span id="txtBtnTout"></span></button>
+          <button class="btn btn-secondary" id="btnGarder" onclick="garderSelection()"><span>🛡️</span><span id="txtBtnGarder"></span></button>
+          <button class="btn btn-danger" id="btnCorbeille" onclick="demanderConfirmationCorbeille()"><span>🗑️</span><span id="txtBtnCorbeille"></span></button>
+        </div>
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="inputFiltre" class="search-input" oninput="filtrerFichiers()">
+        </div>
+      </div>
+
+      <div class="toast-banner" id="messageStatut"></div>
+
+      <div class="list-card">
+        <div class="list-scroll" id="listeFichiers"></div>
+      </div>
+
+      <div class="faq" id="faqResultats"></div>
+    </section>
   </div>
 
-  <!-- Dialogue modal natif MD3 pour confirmation destructive -->
+  <!-- Confirmation avant mise à la corbeille -->
   <dialog id="modalConfirmation">
-    <div class="dialog-title">
-      <span>⚠️</span>
-      <span id="dialogTitre">Confirmation</span>
-    </div>
+    <div class="dialog-title"><span>🗑️</span><span id="dialogTitre"></span></div>
     <div class="dialog-body" id="dialogMessage"></div>
     <div class="dialog-actions">
-      <button class="btn btn-tonal" id="btnDialogAnnuler" onclick="fermerModalConfirmation()">Annuler</button>
-      <button class="btn btn-danger" id="btnDialogConfirmer" onclick="confirmerCorbeille()">Oui, mettre à la corbeille</button>
+      <button class="btn btn-tonal" id="btnDialogAnnuler" onclick="fermerModalConfirmation()"></button>
+      <button class="btn btn-danger" id="btnDialogConfirmer" onclick="confirmerCorbeille()"></button>
     </div>
   </dialog>
 
   <script>
+    const TEXTES = <?!= textesJson ?>;
+    const SEUIL_MOIS = '<?= seuilMois ?>';
+    const TAILLE_LOT = Number('<?= tailleLot ?>') || 100;
+    const MO_PAR_PHOTO = 3;
     const langueServeur = '<?= langueInitiale ?>';
     let langueCourante = (langueServeur === 'en' || langueServeur === 'fr') ? langueServeur : 'fr';
-    let etat = { fichiers: [], facteurCo2: 0.2, tailleLot: 100, textes: null };
-    // Aucune présélection : l'action destructive part d'un choix explicite de l'utilisateur.
-    let ensembleSelection = new Set();
-    let termeFiltre = '';
 
-    function initialiser() {
-      google.script.run
-        .withSuccessHandler((reponse) => {
-          etat = reponse;
-          ensembleSelection = new Set();
-          document.getElementById('skeletonLoader').style.display = 'none';
-          afficherInterface();
-        })
-        .withFailureHandler((err) => {
-          document.getElementById('skeletonLoader').style.display = 'none';
-          afficherMessage(err.message, true);
-        })
-        .chargerDonneesConsole();
+    const etat = {
+      ecran: 'accueil',
+      fichiers: [],
+      jeton: null,
+      dateLimiteIso: null,
+      scannes: 0,
+      arretDemande: false,
+      gainMo: 0,
+      derniereCorbeille: [],
+      selection: new Set(),
+      filtre: '',
+      erreurAnalyse: ''
+    };
+
+    /** @returns {Object} Textes de la langue courante. */
+    function t() {
+      return TEXTES[langueCourante] || TEXTES.fr;
+    }
+
+    /**
+     * Remplace les marqueurs {cle} d'un modèle de texte.
+     * @param {string} modele
+     * @param {Object} valeurs
+     * @returns {string}
+     */
+    function formater(modele, valeurs) {
+      return String(modele || '').replace(/\{(\w+)\}/g, (tout, cle) => (cle in valeurs ? String(valeurs[cle]) : tout));
+    }
+
+    /**
+     * Formate un volume en Mo ou Go.
+     * @param {number} mo
+     * @returns {string}
+     */
+    function formaterVolume(mo) {
+      const unite = t().uniteTaille;
+      if (Math.abs(mo) >= 1024) {
+        return `${(mo / 1024).toFixed(2)} ${unite === 'Mo' ? 'Go' : 'GB'}`;
+      }
+      return `${mo.toFixed(1)} ${unite}`;
+    }
+
+    function afficherEcran(nom) {
+      etat.ecran = nom;
+      ['accueil', 'analyse', 'resultats'].forEach((n) => {
+        const id = 'ecran' + n.charAt(0).toUpperCase() + n.slice(1);
+        document.getElementById(id).classList.toggle('actif', n === nom);
+      });
     }
 
     function basculerLangue() {
       langueCourante = langueCourante === 'fr' ? 'en' : 'fr';
-      afficherInterface();
+      appliquerTextes();
+      if (etat.ecran === 'resultats') rendreResultats();
+      if (etat.ecran === 'analyse') majProgression();
     }
 
-    function obtenirTextes() {
-      if (!etat.textes) return null;
-      return etat.textes[langueCourante] || etat.textes.fr;
+    /** Applique les libellés statiques de la langue courante. */
+    function appliquerTextes() {
+      const x = t();
+      document.documentElement.lang = langueCourante;
+      const fixer = (id, texte) => { document.getElementById(id).textContent = texte; };
+      fixer('titreConsole', '🌱 ' + x.titreConsole);
+      fixer('sousTitreConsole', x.sousTitreConsole);
+      fixer('accueilTitre', x.accueilTitre);
+      fixer('accueilPoint1', formater(x.accueilPoint1, { mois: SEUIL_MOIS }));
+      fixer('accueilPoint2', x.accueilPoint2);
+      fixer('accueilPoint3', x.accueilPoint3);
+      fixer('btnAnalyser', x.btnAnalyser);
+      fixer('analyseTitre', x.analyseEnCours);
+      fixer('btnArreter', x.btnArreter);
+      fixer('lblFichiers', x.kpiFichiers);
+      fixer('lblVolume', x.kpiVolume);
+      fixer('lblGain', x.kpiGain);
+      fixer('txtAnalyseIncomplete', x.analyseIncomplete);
+      fixer('btnContinuer', x.btnContinuer);
+      fixer('txtBtnTout', x.btnToutSelectionner);
+      fixer('txtBtnGarder', x.btnGarder);
+      fixer('txtBtnCorbeille', x.btnMettreCorbeille);
+      fixer('dialogTitre', x.titreModalCorbeille);
+      fixer('btnDialogAnnuler', x.btnAnnuler);
+      fixer('btnDialogConfirmer', x.btnConfirmer);
+      document.getElementById('inputFiltre').placeholder = x.placeholderFiltre;
+      document.getElementById('btnLangue').textContent = langueCourante.toUpperCase() + ' ⇄ ' + (langueCourante === 'fr' ? 'EN' : 'FR');
+      rendreFaq('faqAccueil');
+      rendreFaq('faqResultats');
     }
+
+    function rendreFaq(idConteneur) {
+      const x = t();
+      const conteneur = document.getElementById(idConteneur);
+      conteneur.textContent = '';
+      const titre = document.createElement('h3');
+      titre.textContent = '❓ ' + x.faqTitre;
+      conteneur.appendChild(titre);
+      (x.faq || []).forEach((item) => {
+        const details = document.createElement('details');
+        const resume = document.createElement('summary');
+        resume.textContent = item.q;
+        const reponse = document.createElement('p');
+        reponse.textContent = item.a;
+        details.appendChild(resume);
+        details.appendChild(reponse);
+        conteneur.appendChild(details);
+      });
+    }
+
+    /* ---------- Analyse ---------- */
 
     /**
-     * Détermine l'icône et le libellé lisible du type de fichier.
-     * @param {string} mimeType Type MIME du fichier.
-     * @param {string} nomFichier Nom du fichier.
-     * @returns {{icone: string, libelle: string}}
+     * Lance (ou poursuit) l'analyse du Drive par appels courts successifs.
+     * @param {boolean} continuer true pour reprendre au jeton précédent.
      */
+    function lancerAnalyse(continuer) {
+      if (!continuer) {
+        etat.fichiers = [];
+        etat.jeton = null;
+        etat.dateLimiteIso = null;
+        etat.scannes = 0;
+        etat.selection.clear();
+      }
+      etat.arretDemande = false;
+      etat.erreurAnalyse = '';
+      document.getElementById('btnArreter').disabled = false;
+      afficherEcran('analyse');
+      majProgression();
+      appelerAnalyse();
+    }
+
+    function appelerAnalyse() {
+      const parametres = etat.jeton ? { jetonPage: etat.jeton, dateLimiteIso: etat.dateLimiteIso } : {};
+      google.script.run
+        .withSuccessHandler((res) => {
+          const connus = new Set(etat.fichiers.map((f) => f.id));
+          (res.fichiers || []).forEach((f) => { if (!connus.has(f.id)) etat.fichiers.push(f); });
+          etat.scannes += res.scannes || 0;
+          etat.jeton = res.jetonSuivant || null;
+          etat.dateLimiteIso = res.dateLimiteIso;
+          majProgression();
+          if (etat.jeton && !etat.arretDemande) {
+            appelerAnalyse();
+          } else {
+            terminerAnalyse();
+          }
+        })
+        .withFailureHandler((err) => {
+          etat.erreurAnalyse = err.message || String(err);
+          terminerAnalyse();
+          afficherMessage(`${t().erreurServeur} ${etat.erreurAnalyse}`, true);
+        })
+        .analyserMonDrive(parametres);
+    }
+
+    function majProgression() {
+      document.getElementById('texteProgression').textContent =
+        formater(t().analyseProgression, { scannes: etat.scannes, trouves: etat.fichiers.length });
+    }
+
+    function arreterAnalyse() {
+      etat.arretDemande = true;
+      document.getElementById('btnArreter').disabled = true;
+    }
+
+    function terminerAnalyse() {
+      // Les plus gros fichiers d'abord : le gain le plus visible pour le moins d'effort.
+      etat.fichiers.sort((a, b) => (Number(b.tailleMo) || 0) - (Number(a.tailleMo) || 0));
+      afficherEcran('resultats');
+      masquerMessage();
+      rendreResultats();
+    }
+
+    /* ---------- Résultats ---------- */
+
     function obtenirInfosTypeFichier(mimeType, nomFichier) {
       const mime = (mimeType || '').toLowerCase();
       const nom = (nomFichier || '').toLowerCase();
       const ext = nom.includes('.') ? nom.split('.').pop() : '';
-
-      if (mime.includes('spreadsheet') || mime.includes('excel') || ext === 'xlsx' || ext === 'xls') {
-        return { icone: '📊', libelle: mime.includes('google-apps') ? 'Google Sheet' : 'Excel' };
-      }
-      if (mime.includes('presentation') || mime.includes('powerpoint') || ext === 'pptx' || ext === 'ppt') {
-        return { icone: '📑', libelle: mime.includes('google-apps') ? 'Google Slides' : 'PowerPoint' };
-      }
-      if (mime.includes('document') || mime.includes('word') || ext === 'docx' || ext === 'doc') {
-        return { icone: '📄', libelle: mime.includes('google-apps') ? 'Google Doc' : 'Word' };
-      }
-      if (mime.includes('form')) {
-        return { icone: '📋', libelle: 'Google Forms' };
-      }
-      if (mime.includes('pdf') || ext === 'pdf') {
-        return { icone: '📕', libelle: 'PDF' };
-      }
-      if (mime.includes('image') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) {
-        return { icone: '🖼️', libelle: ext ? ext.toUpperCase() : 'Image' };
-      }
-      if (mime.includes('video') || ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) {
-        return { icone: '🎬', libelle: ext ? ext.toUpperCase() : 'Vidéo' };
-      }
-      if (mime.includes('audio') || ['mp3', 'wav', 'ogg', 'm4a', 'flac'].includes(ext)) {
-        return { icone: '🎵', libelle: ext ? ext.toUpperCase() : 'Audio' };
-      }
-      if (mime.includes('zip') || mime.includes('tar') || mime.includes('compressed') || ['zip', 'tar', 'gz', '7z', 'rar'].includes(ext)) {
-        return { icone: '📦', libelle: ext ? ext.toUpperCase() : 'Archive' };
-      }
-      if (mime.includes('csv') || ext === 'csv') {
-        return { icone: '📊', libelle: 'CSV' };
-      }
-      if (mime.includes('text') || ['txt', 'md', 'log'].includes(ext)) {
-        return { icone: '📝', libelle: ext ? ext.toUpperCase() : 'Texte' };
-      }
-      if (mime.includes('script') || ['js', 'gs', 'py', 'html', 'css', 'json'].includes(ext)) {
-        return { icone: '⚙️', libelle: ext ? ext.toUpperCase() : 'Script' };
-      }
-      return { icone: '📁', libelle: ext ? ext.toUpperCase() : 'Fichier' };
+      if (mime.includes('spreadsheet') || mime.includes('excel') || ext === 'xlsx' || ext === 'xls') return { icone: '📊', libelle: mime.includes('google-apps') ? 'Google Sheets' : 'Excel' };
+      if (mime.includes('presentation') || mime.includes('powerpoint') || ext === 'pptx' || ext === 'ppt') return { icone: '📑', libelle: mime.includes('google-apps') ? 'Google Slides' : 'PowerPoint' };
+      if (mime.includes('document') || mime.includes('word') || ext === 'docx' || ext === 'doc') return { icone: '📄', libelle: mime.includes('google-apps') ? 'Google Docs' : 'Word' };
+      if (mime.includes('form')) return { icone: '📋', libelle: 'Google Forms' };
+      if (mime.includes('pdf') || ext === 'pdf') return { icone: '📕', libelle: 'PDF' };
+      if (mime.includes('image')) return { icone: '🖼️', libelle: langueCourante === 'fr' ? 'Image' : 'Image' };
+      if (mime.includes('video')) return { icone: '🎬', libelle: langueCourante === 'fr' ? 'Vidéo' : 'Video' };
+      if (mime.includes('audio')) return { icone: '🎵', libelle: 'Audio' };
+      if (mime.includes('zip') || mime.includes('compressed') || ['zip', 'tar', 'gz', '7z', 'rar'].includes(ext)) return { icone: '📦', libelle: 'Archive' };
+      if (mime.includes('csv') || ext === 'csv') return { icone: '📊', libelle: 'CSV' };
+      if (mime.includes('text')) return { icone: '📝', libelle: langueCourante === 'fr' ? 'Texte' : 'Text' };
+      return { icone: '📁', libelle: ext ? ext.toUpperCase() : (langueCourante === 'fr' ? 'Fichier' : 'File') };
     }
 
-    function afficherInterface() {
-      const t = obtenirTextes();
-      if (!t) return;
+    function obtenirFichiersVisibles() {
+      return etat.fichiers.filter((f) => {
+        if (!etat.filtre) return true;
+        const type = obtenirInfosTypeFichier(f.mimeType, f.nom);
+        return `${f.nom || ''} ${type.libelle}`.toLowerCase().includes(etat.filtre);
+      });
+    }
 
-      document.documentElement.lang = langueCourante;
-      document.getElementById('titreConsole').textContent = '🌱 ' + t.titreConsole;
-      document.getElementById('sousTitreConsole').textContent = t.sousTitreConsole;
-      document.getElementById('lblFichiers').textContent = t.kpiFichiers;
-      document.getElementById('lblVolume').textContent = t.kpiVolume;
-      document.getElementById('lblCarbone').textContent = t.kpiCarbone;
-      document.getElementById('txtBtnTout').textContent = t.btnToutSelectionner;
-      document.getElementById('txtBtnCorbeille').textContent = t.btnMettreCorbeille;
-      document.getElementById('txtBtnListeBlanche').textContent = t.btnListeBlanche;
-      document.getElementById('inputFiltre').placeholder = t.placeholderFiltre || 'Filtrer par nom ou type...';
-      document.getElementById('btnLangue').textContent = langueCourante.toUpperCase() + ' ⇄ ' + (langueCourante === 'fr' ? 'EN' : 'FR');
+    function filtrerFichiers() {
+      etat.filtre = (document.getElementById('inputFiltre').value || '').trim().toLowerCase();
+      rendreListe();
+    }
 
+    function rendreResultats() {
+      // Bandeau « Continuer » : analyse partielle, ou nouvelle tentative après une erreur.
+      document.getElementById('bandeauContinuer').style.display = (etat.jeton || etat.erreurAnalyse) ? 'flex' : 'none';
       recalculerKpi();
       rendreListe();
     }
 
     function recalculerKpi() {
-      const t = obtenirTextes();
-      if (!t) return;
-      const unite = t.uniteTaille || 'Mo';
-
-      let totalMoGlobal = 0;
-      let totalMoSelectionne = 0;
-
+      const x = t();
+      let totalMo = 0;
+      let selectionMo = 0;
       etat.fichiers.forEach((f) => {
         const mo = Number(f.tailleMo) || 0;
-        totalMoGlobal += mo;
-        if (ensembleSelection.has(f.id)) {
-          totalMoSelectionne += mo;
-        }
+        totalMo += mo;
+        if (etat.selection.has(f.id)) selectionMo += mo;
       });
-
-      const nbSelectionnes = ensembleSelection.size;
-      const nbTotal = etat.fichiers.length;
-      const co2Grammes = Math.round((totalMoSelectionne / 1024) * etat.facteurCo2 * 1000);
-
-      document.getElementById('valFichiers').textContent = String(nbTotal);
-      document.getElementById('subFichiers').textContent = `${nbSelectionnes} ${t.kpiSelectionnes || 'sélectionné(s)'}`;
-
-      document.getElementById('valVolume').textContent = `${totalMoSelectionne.toFixed(1)} ${unite}`;
-      document.getElementById('subVolume').textContent = `${t.surTotal} ${totalMoGlobal.toFixed(1)} ${unite}`;
-
-      document.getElementById('valCarbone').textContent = `${co2Grammes} gCO2e`;
-      document.getElementById('subCarbone').textContent = t.parAnEconomises;
-
-      const btnCorbeille = document.getElementById('btnCorbeille');
-      const btnListeBlanche = document.getElementById('btnListeBlanche');
-      btnCorbeille.disabled = nbSelectionnes === 0;
-      btnListeBlanche.disabled = nbSelectionnes === 0;
-    }
-
-    function filtrerFichiers() {
-      termeFiltre = (document.getElementById('inputFiltre').value || '').trim().toLowerCase();
-      rendreListe();
-    }
-
-    /**
-     * Renvoie les fichiers correspondant au filtre courant (ceux affichés à l'écran).
-     * @returns {Array<Object>}
-     */
-    function obtenirFichiersVisibles() {
-      return etat.fichiers.filter((f) => {
-        if (!termeFiltre) return true;
-        const typeInfo = obtenirInfosTypeFichier(f.mimeType, f.nom);
-        const texteRecherche = `${f.nom || ''} ${typeInfo.libelle}`.toLowerCase();
-        return texteRecherche.includes(termeFiltre);
-      });
+      document.getElementById('valFichiers').textContent = String(etat.fichiers.length);
+      document.getElementById('subFichiers').textContent = `${etat.selection.size} ${x.kpiSelectionnes}`;
+      document.getElementById('valVolume').textContent = formaterVolume(selectionMo);
+      document.getElementById('subVolume').textContent = `${x.surTotal} ${formaterVolume(totalMo)}`;
+      document.getElementById('valGain').textContent = formaterVolume(Math.max(0, etat.gainMo));
+      document.getElementById('subGain').textContent = formater(x.equivalentPhotos, { n: Math.max(0, Math.round(etat.gainMo / MO_PAR_PHOTO)) });
+      const aucune = etat.selection.size === 0;
+      document.getElementById('btnCorbeille').disabled = aucune;
+      document.getElementById('btnGarder').disabled = aucune;
     }
 
     function rendreListe() {
-      const t = obtenirTextes();
+      const x = t();
       const conteneur = document.getElementById('listeFichiers');
       conteneur.textContent = '';
+      const visibles = obtenirFichiersVisibles();
 
-      const fichiersFiltres = obtenirFichiersVisibles();
-
-      if (fichiersFiltres.length === 0) {
-        const messageVide = document.createElement('div');
-        messageVide.style.padding = '32px 16px';
-        messageVide.style.textAlign = 'center';
-        messageVide.style.color = 'var(--md-sys-color-on-surface-variant)';
-        messageVide.textContent = etat.fichiers.length === 0 ? t.aucunFichier : t.aucunResultatFiltre;
-        conteneur.appendChild(messageVide);
+      if (visibles.length === 0) {
+        const vide = document.createElement('div');
+        vide.style.padding = '32px 16px';
+        vide.style.textAlign = 'center';
+        vide.style.color = 'var(--md-sys-color-on-surface-variant)';
+        if (etat.fichiers.length > 0) {
+          vide.textContent = x.aucunResultatFiltre;
+        } else if (etat.erreurAnalyse) {
+          vide.textContent = `⚠️ ${x.erreurServeur} ${etat.erreurAnalyse}`;
+        } else {
+          vide.textContent = '🎉 ' + x.aucunFichier;
+        }
+        conteneur.appendChild(vide);
         return;
       }
 
-      const unite = t.uniteTaille || 'Mo';
-      const libelleInactif = t.inactifDepuis || 'Inactif depuis :';
+      visibles.forEach((f) => {
+        const ligne = document.createElement('div');
+        ligne.className = 'file-row';
 
-      fichiersFiltres.forEach((f) => {
-        const row = document.createElement('div');
-        row.className = 'file-row';
-
-        const cbWrap = document.createElement('label');
-        cbWrap.className = 'cb-wrap';
-
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.value = f.id;
-        cb.checked = ensembleSelection.has(f.id);
-        cb.addEventListener('change', (e) => {
-          if (e.target.checked) {
-            ensembleSelection.add(f.id);
-          } else {
-            ensembleSelection.delete(f.id);
-          }
+        const caseWrap = document.createElement('label');
+        caseWrap.className = 'cb-wrap';
+        const caseACocher = document.createElement('input');
+        caseACocher.type = 'checkbox';
+        caseACocher.checked = etat.selection.has(f.id);
+        caseACocher.setAttribute('aria-label', f.nom || '');
+        caseACocher.addEventListener('change', (e) => {
+          if (e.target.checked) etat.selection.add(f.id); else etat.selection.delete(f.id);
           recalculerKpi();
         });
+        caseWrap.appendChild(caseACocher);
 
-        cbWrap.appendChild(cb);
-
-        const typeInfo = obtenirInfosTypeFichier(f.mimeType, f.nom);
-
+        const type = obtenirInfosTypeFichier(f.mimeType, f.nom);
         const details = document.createElement('div');
         details.className = 'file-details';
 
-        const link = document.createElement('a');
-        link.className = 'file-link';
-        link.href = /^https:\/\//i.test(f.url || '') ? f.url : '#';
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = `${typeInfo.icone} ${f.nom || 'Sans titre'}`;
+        const lien = document.createElement('a');
+        lien.className = 'file-link';
+        lien.href = /^https:\/\//i.test(f.url || '') ? f.url : '#';
+        lien.target = '_blank';
+        lien.rel = 'noopener noreferrer';
+        lien.title = x.ouvrir;
+        lien.textContent = `${type.icone} ${f.nom || '—'}`;
 
         const badges = document.createElement('div');
         badges.className = 'file-badges';
+        const listeBadges = [[type.libelle, 'badge badge-type'], [`💾 ${formaterVolume(Number(f.tailleMo) || 0)}`, 'badge'], [`🕒 ${x.inactifDepuis} ${f.derniereActivite}`, 'badge']];
+        if (f.partage) listeBadges.push([x.badgePartage, 'badge badge-partage']);
+        listeBadges
+          .forEach(([texte, classe]) => {
+            const badge = document.createElement('span');
+            badge.className = classe;
+            badge.textContent = texte;
+            badges.appendChild(badge);
+          });
 
-        const badgeType = document.createElement('span');
-        badgeType.className = 'badge badge-type';
-        badgeType.textContent = typeInfo.libelle;
-
-        const badgeTaille = document.createElement('span');
-        badgeTaille.className = 'badge';
-        badgeTaille.textContent = `💾 ${f.tailleMo} ${unite}`;
-
-        const badgeDate = document.createElement('span');
-        badgeDate.className = 'badge';
-        badgeDate.textContent = `🕒 ${libelleInactif} ${f.derniereActivite}`;
-
-        badges.appendChild(badgeType);
-        badges.appendChild(badgeTaille);
-        badges.appendChild(badgeDate);
-
-        details.appendChild(link);
+        details.appendChild(lien);
         details.appendChild(badges);
-
-        row.appendChild(cbWrap);
-        row.appendChild(details);
-        conteneur.appendChild(row);
+        ligne.appendChild(caseWrap);
+        ligne.appendChild(details);
+        conteneur.appendChild(ligne);
       });
     }
 
-    /**
-     * Coche ou décoche uniquement les fichiers affichés (respecte le filtre en cours) :
-     * un fichier masqué par le filtre ne peut pas partir à la corbeille à l'insu de l'utilisateur.
-     */
+    /** Coche ou décoche uniquement les fichiers affichés (respecte la recherche en cours). */
     function toutSelectionner() {
       const visibles = obtenirFichiersVisibles();
-      const tousCoches = visibles.length > 0 && visibles.every((f) => ensembleSelection.has(f.id));
-      visibles.forEach((f) => {
-        if (tousCoches) {
-          ensembleSelection.delete(f.id);
-        } else {
-          ensembleSelection.add(f.id);
-        }
-      });
+      const tousCoches = visibles.length > 0 && visibles.every((f) => etat.selection.has(f.id));
+      visibles.forEach((f) => (tousCoches ? etat.selection.delete(f.id) : etat.selection.add(f.id)));
       rendreListe();
       recalculerKpi();
     }
 
-    function demanderConfirmationCorbeille() {
-      const t = obtenirTextes();
-      const nb = ensembleSelection.size;
-      if (nb === 0) return;
+    /* ---------- Actions ---------- */
 
-      const unite = t.uniteTaille || 'Mo';
-      let totalMo = 0;
-      etat.fichiers.forEach((f) => {
-        if (ensembleSelection.has(f.id)) {
-          totalMo += Number(f.tailleMo) || 0;
+    /**
+     * Appelle une fonction serveur par lots successifs et cumule les résultats.
+     * @param {string} nomFonction Fonction serveur (mettreCorbeilleMesFichiers, conserverMesFichiers, annulerCorbeilleMesFichiers).
+     * @param {string[]} ids ID à traiter.
+     * @param {function(Set<string>, number, number, ?Error): void} fin Rappel (idsTraites, nbEchecs, moLiberes, erreur).
+     */
+    function executerParLots(nomFonction, ids, fin) {
+      const lots = [];
+      for (let i = 0; i < ids.length; i += TAILLE_LOT) lots.push(ids.slice(i, i + TAILLE_LOT));
+      const traites = new Set();
+      let nbEchecs = 0;
+      let mo = 0;
+      definirEtatBoutons(true);
+
+      const suivant = (index) => {
+        if (index >= lots.length) {
+          definirEtatBoutons(false);
+          fin(traites, nbEchecs, mo, null);
+          return;
         }
-      });
+        afficherMessage(`${t().traitementEnCours} (${index + 1}/${lots.length})`, false);
+        google.script.run
+          .withSuccessHandler((res) => {
+            (res.idsTraites || []).forEach((id) => traites.add(id));
+            nbEchecs += (res.idsEchecs || []).length;
+            mo += Number(res.moLiberes) || 0;
+            suivant(index + 1);
+          })
+          .withFailureHandler((err) => {
+            definirEtatBoutons(false);
+            fin(traites, nbEchecs, mo, err);
+          })[nomFonction](lots[index]);
+      };
+      suivant(0);
+    }
 
-      const messageTpl = t.messageModalCorbeille || 'Êtes-vous certain de vouloir déplacer les {nb} fichier(s) sélectionné(s) ({volume}) à la corbeille ?';
-      const message = messageTpl
-        .replace('{nb}', () => String(nb))
-        .replace('{volume}', () => `${totalMo.toFixed(1)} ${unite}`);
+    /**
+     * Construit le message de fin d'action (succès, échecs partiels, erreur).
+     * @returns {{texte: string, estErreur: boolean}}
+     */
+    function messageBilan(modeleSucces, traites, nbEchecs, erreur) {
+      const x = t();
+      let texte = formater(modeleSucces, { n: traites.size });
+      if (nbEchecs > 0) texte += ' ' + formater(x.fichiersNonTraites, { n: nbEchecs });
+      if (erreur) texte += ` ${x.erreurServeur} ${erreur.message}`;
+      return { texte, estErreur: Boolean(erreur) || nbEchecs > 0 };
+    }
 
-      document.getElementById('dialogTitre').textContent = t.titreModalCorbeille || 'Confirmation';
+    function retirerDeLaListe(ids) {
+      const retires = etat.fichiers.filter((f) => ids.has(f.id));
+      etat.fichiers = etat.fichiers.filter((f) => !ids.has(f.id));
+      ids.forEach((id) => etat.selection.delete(id));
+      return retires;
+    }
+
+    function demanderConfirmationCorbeille() {
+      const ids = Array.from(etat.selection);
+      if (ids.length === 0) return;
+      const selectionnes = etat.fichiers.filter((f) => etat.selection.has(f.id));
+      const mo = selectionnes.reduce((a, f) => a + (Number(f.tailleMo) || 0), 0);
+      const nbPartages = selectionnes.filter((f) => f.partage).length;
+      let message = formater(t().messageModalCorbeille, { nb: ids.length, volume: formaterVolume(mo) });
+      if (nbPartages > 0) message += '\n\n' + formater(t().avertissementPartages, { n: nbPartages });
       document.getElementById('dialogMessage').textContent = message;
-      document.getElementById('btnDialogAnnuler').textContent = t.btnAnnuler || 'Annuler';
-      document.getElementById('btnDialogConfirmer').textContent = t.btnConfirmer || 'Oui, mettre à la corbeille';
-
       document.getElementById('modalConfirmation').showModal();
     }
 
@@ -859,77 +1001,75 @@
 
     function confirmerCorbeille() {
       fermerModalConfirmation();
-      executerAction('CORBEILLE');
+      executerParLots('mettreCorbeilleMesFichiers', Array.from(etat.selection), (traites, nbEchecs, mo, erreur) => {
+        etat.derniereCorbeille = retirerDeLaListe(traites);
+        etat.gainMo += mo;
+        rendreResultats();
+        const bilan = messageBilan(t().corbeilleSucces, traites, nbEchecs, erreur);
+        afficherMessage(bilan.texte, bilan.estErreur, traites.size > 0);
+      });
     }
 
-    /**
-     * Envoie la sélection au serveur par lots successifs (limite de 6 min par appel)
-     * et ne retire de la liste que les fichiers réellement traités côté serveur.
-     * @param {string} action 'CORBEILLE' ou 'LISTE_BLANCHE'.
-     */
-    function executerAction(action) {
-      const ids = Array.from(ensembleSelection);
-      if (ids.length === 0) return;
+    function garderSelection() {
+      etat.derniereCorbeille = [];
+      executerParLots('conserverMesFichiers', Array.from(etat.selection), (traites, nbEchecs, mo, erreur) => {
+        retirerDeLaListe(traites);
+        rendreResultats();
+        const bilan = messageBilan(t().gardeSucces, traites, nbEchecs, erreur);
+        afficherMessage(bilan.texte, bilan.estErreur);
+      });
+    }
 
-      const t = obtenirTextes();
-      const tailleLot = Number(etat.tailleLot) || 100;
-      const lots = [];
-      for (let i = 0; i < ids.length; i += tailleLot) {
-        lots.push(ids.slice(i, i + tailleLot));
-      }
-      const idsTraites = new Set();
-      let nbEchecs = 0;
-
-      definirEtatBoutons(true);
-
-      const terminer = (erreur) => {
-        definirEtatBoutons(false);
-        etat.fichiers = etat.fichiers.filter((f) => !idsTraites.has(f.id));
-        idsTraites.forEach((id) => ensembleSelection.delete(id));
-        afficherInterface();
-        if (erreur) {
-          afficherMessage(`${t.erreurServeur} ${erreur.message} (${idsTraites.size} ${t.fichiersTraites})`, true);
-        } else if (nbEchecs > 0) {
-          afficherMessage(`${idsTraites.size} ${t.fichiersTraites} · ${nbEchecs} ${t.fichiersNonTraites}`, true);
-        } else {
-          afficherMessage(`${t.confirmationSucces} (${idsTraites.size} ${t.fichiersTraites})`, false);
-        }
-      };
-
-      const envoyerLot = (index) => {
-        if (index >= lots.length) {
-          terminer(null);
-          return;
-        }
-        afficherMessage(`${t.traitementEnCours} (${index + 1}/${lots.length})`, false);
-        google.script.run
-          .withSuccessHandler((res) => {
-            (res.idsTraites || []).forEach((id) => idsTraites.add(id));
-            nbEchecs += (res.idsEchecs || []).length;
-            envoyerLot(index + 1);
-          })
-          .withFailureHandler((err) => terminer(err))
-          .traiterDecisionsUtilisateur({ action, idsFichiers: lots[index] });
-      };
-
-      envoyerLot(0);
+    /** Restaure les fichiers de la dernière mise à la corbeille. */
+    function annulerDerniereCorbeille() {
+      const fichiers = etat.derniereCorbeille;
+      if (fichiers.length === 0) return;
+      executerParLots('annulerCorbeilleMesFichiers', fichiers.map((f) => f.id), (traites, nbEchecs, mo, erreur) => {
+        fichiers.filter((f) => traites.has(f.id)).forEach((f) => etat.fichiers.push(f));
+        etat.fichiers.sort((a, b) => (Number(b.tailleMo) || 0) - (Number(a.tailleMo) || 0));
+        etat.derniereCorbeille = fichiers.filter((f) => !traites.has(f.id));
+        etat.gainMo += mo;
+        rendreResultats();
+        const bilan = messageBilan(t().annulationSucces, traites, nbEchecs, erreur);
+        afficherMessage(bilan.texte, bilan.estErreur, etat.derniereCorbeille.length > 0);
+      });
     }
 
     function definirEtatBoutons(desactive) {
-      document.getElementById('btnCorbeille').disabled = desactive;
-      document.getElementById('btnListeBlanche').disabled = desactive;
-      document.getElementById('btnTout').disabled = desactive;
-      document.getElementById('inputFiltre').disabled = desactive;
+      ['btnCorbeille', 'btnGarder', 'btnTout', 'inputFiltre', 'btnContinuer'].forEach((id) => {
+        document.getElementById(id).disabled = desactive;
+      });
+      if (!desactive) recalculerKpi();
     }
 
-    function afficherMessage(texte, estErreur) {
-      const box = document.getElementById('messageStatut');
-      box.style.display = 'flex';
-      box.className = `toast-banner ${estErreur ? 'toast-error' : 'toast-success'}`;
-      box.textContent = texte;
+    /**
+     * Affiche le bandeau de statut, avec un bouton « Annuler » optionnel.
+     * @param {string} texte
+     * @param {boolean} estErreur
+     * @param {boolean} [avecAnnulation=false]
+     */
+    function afficherMessage(texte, estErreur, avecAnnulation) {
+      const bandeau = document.getElementById('messageStatut');
+      bandeau.textContent = '';
+      bandeau.style.display = 'flex';
+      bandeau.className = `toast-banner ${estErreur ? 'toast-error' : 'toast-success'}`;
+      const span = document.createElement('span');
+      span.textContent = texte;
+      bandeau.appendChild(span);
+      if (avecAnnulation) {
+        const bouton = document.createElement('button');
+        bouton.className = 'btn-annuler';
+        bouton.textContent = '↩ ' + t().btnAnnulerAction;
+        bouton.addEventListener('click', annulerDerniereCorbeille);
+        bandeau.appendChild(bouton);
+      }
     }
 
-    window.addEventListener('DOMContentLoaded', initialiser);
+    function masquerMessage() {
+      document.getElementById('messageStatut').style.display = 'none';
+    }
+
+    window.addEventListener('DOMContentLoaded', appliquerTextes);
   </script>
 </body>
 </html>

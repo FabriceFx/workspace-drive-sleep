@@ -1,5 +1,5 @@
 /**
- * @fileoverview Points d'entrée principaux (onOpen, doGet, déclencheurs et interface utilisateur).
+ * @fileoverview Points d'entrée principaux (onOpen, menus, console, déclencheurs).
  * Projet : Drive Sleep & Green FinOps (workspace-drive-sleep)
  * Auteur : Fabrice Faucheux (FF Labs - faucheux.bzh)
  */
@@ -116,15 +116,28 @@ function actionMenuNotifier(forcerRenvoi = false) {
 }
 
 /**
- * Ouvre la console de nettoyage en boîte de dialogue modale dans Google Sheets.
+ * Prépare le modèle Ui.html (console de tri) avec la langue, les textes et le seuil d'inactivité.
+ * @param {string} langue 'fr' ou 'en'.
+ * @returns {GoogleAppsScript.HTML.HtmlOutput} Sortie HTML évaluée.
+ */
+function construireConsole_(langue) {
+  const template = HtmlService.createTemplateFromFile('Ui');
+  template.langueInitiale = (langue === 'en' || langue === 'fr') ? langue : 'fr';
+  template.textesJson = JSON.stringify(TEXTES_INTERFACE);
+  const config = lireConfiguration();
+  template.seuilMois = String(config.SEUIL_INACTIVITE_MOIS);
+  template.tailleLot = String(config.TAILLE_LOT_DECISIONS);
+  return template.evaluate();
+}
+
+/**
+ * Ouvre la console de tri (analyse du Drive de l'utilisateur courant) dans Google Sheets.
  */
 function afficherConsoleNettoyage() {
   try {
     const langue = obtenirLangueUtilisateur_();
     const t = TEXTES_INTERFACE[langue];
-    const template = HtmlService.createTemplateFromFile('Ui');
-    template.langueInitiale = langue;
-    const html = template.evaluate()
+    const html = construireConsole_(langue)
       .setTitle(`🌱 ${t.titreConsole}`)
       .setWidth(920)
       .setHeight(700);
@@ -133,58 +146,6 @@ function afficherConsoleNettoyage() {
     console.error('Erreur afficherConsoleNettoyage :', erreur);
     SpreadsheetApp.getUi().alert('🌱 Erreur', erreur.message, SpreadsheetApp.getUi().ButtonSet.OK);
   }
-}
-
-/**
- * Point d'entrée de la Web App pour permettre aux utilisateurs de trier leurs fichiers en plein écran.
- * @param {GoogleAppsScript.Events.DoGet} e
- * @returns {GoogleAppsScript.HTML.HtmlOutput}
- */
-function doGet(e) {
-  const langueParam = String(e?.parameter?.lang || '').toLowerCase();
-  const template = HtmlService.createTemplateFromFile('Ui');
-  template.langueInitiale = (langueParam === 'en' || langueParam === 'fr') ? langueParam : obtenirLangueUtilisateur_();
-  return template.evaluate()
-    .setTitle('🌱 Drive Sleep & Green FinOps')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}
-
-/**
- * Renvoie les fichiers dormants de l'utilisateur courant pour Ui.html.
- * Échoue de façon fermée : sans identité, aucun fichier n'est renvoyé.
- * @returns {Object} Liste des fichiers, facteur CO2, taille de lot et traductions.
- */
-function chargerDonneesConsole() {
-  const emailActif = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
-  if (!emailActif) {
-    throw new Error('Impossible d\'identifier votre compte : la console ne peut pas afficher vos fichiers. / Unable to identify your account.');
-  }
-  const config = lireConfiguration();
-  const fichiers = [];
-
-  lireLignesInventaire_().forEach((ligne) => {
-    const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
-    const proprietaire = String(ligne[COLONNES_INVENTAIRE.PROPRIETAIRE] ?? '').trim().toLowerCase();
-    if (statut !== STATUTS_FICHIER.DORMANT && statut !== STATUTS_FICHIER.NOTIFIE) return;
-    if (proprietaire !== emailActif) return;
-    const url = String(ligne[COLONNES_INVENTAIRE.URL] ?? '');
-    fichiers.push({
-      id: String(ligne[COLONNES_INVENTAIRE.ID]),
-      nom: String(ligne[COLONNES_INVENTAIRE.NOM]),
-      mimeType: String(ligne[COLONNES_INVENTAIRE.MIME_TYPE]),
-      tailleMo: Number(ligne[COLONNES_INVENTAIRE.TAILLE_MO]) || 0,
-      derniereActivite: formaterDateFr_(ligne[COLONNES_INVENTAIRE.DERNIERE_ACTIVITE]),
-      url: /^https:\/\//i.test(url) ? url : ''
-    });
-  });
-
-  return {
-    fichiers,
-    facteurCo2: config.FACTEUR_CO2_KG_PAR_GO_AN,
-    tailleLot: config.TAILLE_LOT_DECISIONS,
-    textes: TEXTES_INTERFACE
-  };
 }
 
 /**
@@ -210,7 +171,7 @@ function afficherAPropos() {
  * Cible du déclencheur ponctuel de reprise (fonction distincte du déclencheur mensuel).
  */
 function reprendreAuditDrive() {
-  lancerAuditDrive();
+  return lancerAuditDrive();
 }
 
 /**
@@ -218,8 +179,34 @@ function reprendreAuditDrive() {
  * Si une campagne précédente est encore en cours, elle est poursuivie plutôt que réinitialisée.
  */
 function executerCampagneMensuelle() {
+  exigerAdministrateur_();
   PropertiesService.getScriptProperties().setProperty(CLES_PROPRIETES.NOTIFIER_EN_FIN_AUDIT, 'OUI');
-  lancerAuditDrive();
+  return lancerAuditDrive();
+}
+
+/**
+ * Cible du déclencheur ponctuel d'envoi des bilans en fin de campagne mensuelle.
+ * Le déclencheur est supprimé dès le début pour ne pas s'accumuler.
+ */
+function envoyerBilansCampagne() {
+  exigerAdministrateur_();
+  supprimerDeclencheursParFonction_(FONCTIONS_DECLENCHEURS.ENVOI_BILANS);
+  const bilan = envoyerNotificationsProprietaires();
+  console.info(`Campagne mensuelle : ${bilan.emailsEnvoyes} bilan(s) envoyé(s).`);
+  if (bilan.erreurs.length > 0) {
+    console.warn(`Anomalies d'envoi : ${bilan.erreurs.join(' | ')}`);
+  }
+}
+
+/**
+ * Planifie l'envoi des bilans dans une exécution distincte, une minute plus tard.
+ */
+function planifierEnvoiBilans_() {
+  supprimerDeclencheursParFonction_(FONCTIONS_DECLENCHEURS.ENVOI_BILANS);
+  ScriptApp.newTrigger(FONCTIONS_DECLENCHEURS.ENVOI_BILANS)
+    .timeBased()
+    .after(60 * 1000)
+    .create();
 }
 
 /**
@@ -256,6 +243,7 @@ function supprimerDeclencheursParFonction_(nomFonction) {
  */
 function installerDeclencheurMensuel() {
   try {
+    exigerAdministrateur_();
     supprimerDeclencheursParFonction_(FONCTIONS_DECLENCHEURS.CAMPAGNE_MENSUELLE);
     supprimerDeclencheursParFonction_(FONCTIONS_DECLENCHEURS.ANCIENNE_FONCTION);
     ScriptApp.newTrigger(FONCTIONS_DECLENCHEURS.CAMPAGNE_MENSUELLE)

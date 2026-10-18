@@ -14,7 +14,7 @@
 
 ## 📋 Présentation / Overview
 
-**Drive Sleep & Green FinOps** est un outil d'hygiène numérique et de FinOps « par soustraction » conçu pour Google Workspace (Google Sheets & Web App autonome). Il identifie automatiquement les fichiers Google Drive dormants (anciens et volumineux), permet aux collaborateurs d'effectuer un tri éclairé dans une interface moderne **Material Design 3**, et calcule les bénéfices écologiques (`kgCO2e/an`) et financiers (€/an).
+**Drive Sleep & Green FinOps** est un outil d'hygiène numérique et de FinOps « par soustraction » conçu pour Google Workspace (Google Sheets). Il identifie automatiquement les fichiers Google Drive dormants (anciens et volumineux), permet aux collaborateurs d'effectuer un tri éclairé dans une interface moderne **Material Design 3**, et calcule les bénéfices écologiques (`kgCO2e/an`) et financiers (€/an).
 
 ---
 
@@ -77,6 +77,23 @@ clasp push
 
 ---
 
+## 🙋 Console de tri / Cleanup console
+
+Menu **🌱 Sobriété Drive › 4. Ouvrir la console** : la personne qui l'ouvre analyse **son propre Drive** en direct, puis choisit fichier par fichier « Garder » ou « Mettre à la corbeille », avec bouton « Annuler ». Interface pensée pour les débutants : écran d'accueil, progression, fichiers triés du plus gros au plus petit, FAQ intégrée.
+
+*EN: Menu **🌱 Drive Sleep › 4. Open console**: whoever opens it scans **their own Drive** live, then chooses Keep or Move to trash file by file, with Undo.*
+
+### Fonctionnement / How it works
+- L'analyse s'exécute avec l'identité de l'utilisateur, par appels courts de 20 s enchaînés par la console.
+- « Garder » pose une propriété Drive `driveSleepConserver=1` sur le fichier : il n'est plus jamais proposé (ni dans la console, ni dans l'audit).
+- Les fichiers et dossiers de la feuille `Liste_Blanche` (sous-dossiers compris) sont toujours exclus.
+- Les fichiers partagés portent un badge « 👥 Partagé » et la confirmation avertit que leurs destinataires perdront l'accès.
+- Des compteurs anonymes (fichiers mis à la corbeille, volume, fichiers gardés) alimentent le `Tableau_de_Bord` (lignes 10 à 12) et les totaux CO2 / €.
+- Les fonctions d'administration (audit, e-mails, déclencheurs, tests) sont réservées aux adresses de la propriété de script `ADMINISTRATEURS` (virgules). Le premier éditeur qui lance le menu **1** y est enregistré automatiquement ; ajoutez les autres via *Paramètres du projet > Propriétés du script*.
+- Aucun projet Google Cloud ni déploiement n'est nécessaire.
+
+---
+
 ## 🗂️ Architecture des fichiers / File Structure
 
 ```text
@@ -88,7 +105,8 @@ workspace-drive-sleep/
 ├── DriveService.gs         # Moteur d'audit Drive v3, retry backoff et gestion de la corbeille
 ├── SheetService.gs         # Gestion des onglets, I/O en lot (getValues/setValues) et KPI
 ├── MailService.gs          # Notifications individuelles par e-mail et protection quotas
-├── Main.gs                 # Menus Sheets, boîte modale MD3, Web App doGet et déclencheurs
+├── LibreService.gs         # Console de tri : analyse du Drive de l'utilisateur, garder / corbeille / annuler
+├── Main.gs                 # Menus Sheets, console modale MD3 et déclencheurs
 ├── Tests.gs                # Suite de tests unitaires et d'intégration (runAllTests)
 ├── Ui.html                 # Interface utilisateur Material Design 3 bilingue
 ├── CHANGELOG.md            # Historique des versions et angle émotionnel
@@ -109,5 +127,5 @@ workspace-drive-sleep/
 
 ## 👨‍💻 Auteur & Licence / Author & License
 
-- **Développeur :** Fabrice Faucheux ([FF Labs — faucheux.bzh](https://faucheux.bzh))
+- **Développeur :** Fabrice Faucheux ([faucheux.bzh](https://faucheux.bzh))
 - **Licence :** Distribué sous licence **MIT**. Consultez le fichier [LICENSE](LICENSE) pour plus de détails.

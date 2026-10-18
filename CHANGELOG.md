@@ -7,6 +7,35 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [1.3.0] - 2026-10-18
+
+### 🎯 Angle émotionnel : Le pouvoir redonné au collaborateur
+> *On imagine souvent que pour assainir le stockage d'une organisation, il faut un administrateur tout-puissant qui scrute les fichiers de chacun et impose des purges massives. C'est faux. L'écologie et l'hygiène numérique ne fonctionnent durablement que lorsqu'on redonne le pouvoir d'agir à chaque collaborateur, dans l'intimité de son propre Drive, sans crainte de jugement et avec la certitude apaisante de pouvoir annuler à tout moment.*
+
+### Ajouté / Added
+- **Console de tri personnelle** (`LibreService.gs`, menu 4) : l'utilisateur analyse et trie son propre Drive en direct.
+- Interface pour débutants : écran d'accueil rassurant, analyse avec progression, fichiers triés du plus gros au plus petit, bouton « Annuler » après mise à la corbeille, gain exprimé en équivalent photos, FAQ.
+- « Garder » via une propriété Drive (`properties`) posée sur le fichier (exclusion durable, aussi respectée par l'audit).
+- Compteurs anonymes de la console dans le tableau de bord, intégrés aux totaux CO2 / €.
+- Contrôle d'accès administrateur (`ADMINISTRATEURS`) sur toutes les fonctions publiques d'administration.
+
+### Corrigé (revue du 18/10) / Fixed
+- L'envoi des bilans de fin de campagne s'exécute dans un déclencheur séparé (`envoyerBilansCampagne`) : il ne peut plus être coupé par la limite des 6 minutes de l'audit.
+- Une reprise d'audit en erreur est replanifiée automatiquement (3 tentatives, puis statut `ECHEC`) au lieu de bloquer la campagne en silence.
+- Date limite calculée sans débordement de fin de mois (`calculerDateLimite_`).
+- Console : une erreur d'analyse n'affiche plus « Bravo, aucun fichier en sommeil » ; un bouton permet de relancer.
+- Console : badge « 👥 Partagé » et avertissement dans la confirmation lorsque des fichiers partagés vont être mis à la corbeille.
+- Libellés : « Libéré pendant cette session », FAQ « Garder » et nouvelle question sur les fichiers partagés.
+
+### Supprimé / Removed
+- **Application Web** : `doGet` et la section `webapp` du manifeste sont retirés ; la console s'ouvre uniquement depuis le menu du classeur.
+- `traiterDecisionsUtilisateur` et `chargerDonneesConsole` (remplacées par `analyserMonDrive`, `mettreCorbeilleMesFichiers`, `conserverMesFichiers`, `annulerCorbeilleMesFichiers`).
+
+### Modifié / Changed
+- Le bouton du bilan e-mail pointe vers le classeur (menu › Console).
+
+---
+
 ## [1.2.0] - 2026-10-17
 
 ### 🎯 Angle émotionnel : Le coût de l'inaction
