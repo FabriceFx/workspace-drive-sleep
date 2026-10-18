@@ -7,6 +7,20 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [1.3.2] - 2026-10-18
+
+### 🎯 Angle émotionnel : L'angle terre promise — De l'audit à l'action en un éclair
+> *Vous venez de lancer un audit complet de votre espace, vos fichiers dormants sont répertoriés avec soin dans votre classeur... et lorsque vous ouvrez la console de nettoyage, ils sont déjà là, prêts à être traités en un clic, sans attendre un second scan ni jongler d'un écran à l'autre. Chaque décision prise met immédiatement à jour votre feuille et votre tableau de bord, avec la sérénité absolue d'une synchronisation parfaite.*
+
+### Ajouté / Added
+- **Chargement automatique de `Inventaire_Dormant` dans la console** : À l'ouverture de la console de tri (menu n°4), les fichiers dormants de l'utilisateur déjà recensés dans l'onglet `Inventaire_Dormant` sont pré-chargés et affichés instantanément sur l'écran des résultats, triés par taille décroissante avec KPIs calculés sans délai ni appel Drive API inutile.
+- **Bouton « Analyser en direct » / « Recharger l'inventaire »** : Un bouton contextuel dans la barre d'outils de la console permet de basculer à tout moment entre les fichiers audités dans l'onglet et une analyse live du Drive personnel (`analyserMonDrive`), ou de recharger l'inventaire.
+- **Synchronisation automatique et déverrouillée de l'inventaire** : Les actions effectuées dans la console (mise à la corbeille, garde définitive, annulation) mettent à jour en temps réel les lignes de l'utilisateur dans `Inventaire_Dormant` (statuts `CORBEILLE`, `LISTE_BLANCHE`, `DORMANT`, réinitialisation de `Date_Traitement`) et rafraîchissent immédiatement le `Tableau_de_Bord`.
+- **Badge du dossier parent dans l'interface** : Affichage du nom du dossier parent conteneur sous forme de badge (`📁 Dossier`) sur chaque carte de fichier de la console de nettoyage.
+- **Suite de tests** : Ajout du test unitaire `test_CA12_chargementInventaireConsole` (extraction du dossier parent, filtrage des statuts `DORMANT`/`NOTIFIE` et tri par taille).
+
+---
+
 ## [1.3.1] - 2026-10-18
 
 ### 🎯 Angle émotionnel : L'angle douleur — La fin de la navigation à l'aveugle

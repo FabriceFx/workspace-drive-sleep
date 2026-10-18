@@ -81,9 +81,9 @@ clasp push
 
 ## 🙋 Console de tri / Cleanup console
 
-Menu **🌱 Sobriété Drive › 4. Ouvrir la console** : la personne qui l'ouvre analyse **son propre Drive** en direct, puis choisit fichier par fichier « Garder » ou « Mettre à la corbeille », avec bouton « Annuler ». Interface pensée pour les débutants : écran d'accueil, progression, fichiers triés du plus gros au plus petit, FAQ intégrée.
+Menu **🌱 Sobriété Drive › 4. Ouvrir la console** : la personne qui l'ouvre accède immédiatement à ses fichiers dormants répertoriés dans l'onglet **`Inventaire_Dormant`** (ou lance une analyse en direct de **son propre Drive** via le bouton 🔄), puis choisit fichier par fichier « Garder » ou « Mettre à la corbeille », avec bouton « Annuler ». Interface pensée pour les débutants : pré-chargement instantané, progression, fichiers triés du plus gros au plus petit, FAQ intégrée et mise à jour synchronisée de la feuille de calcul.
 
-*EN: Menu **🌱 Drive Sleep › 4. Open console**: whoever opens it scans **their own Drive** live, then chooses Keep or Move to trash file by file, with Undo.*
+*EN: Menu **🌱 Drive Sleep › 4. Open console**: whoever opens it immediately accesses their dormant files from the **`Inventaire_Dormant`** sheet (or runs a live scan of **their own Drive** via the 🔄 button), then chooses Keep or Move to trash file by file, with Undo and real-time sheet synchronization.*
 
 ### Fonctionnement / How it works
 - L'analyse s'exécute avec l'identité de l'utilisateur, par appels courts de 20 s enchaînés par la console.

@@ -315,7 +315,7 @@ function appliquerStatutsParId_(majParId, statutsModifiables) {
     const statutActuel = String(statuts[index][0] ?? '').trim();
     if (!statutsModifiables.includes(statutActuel)) return;
     statuts[index][0] = maj.statut;
-    if (maj.date) {
+    if (maj.date !== undefined) {
       statuts[index][1] = maj.date;
     }
     idsMisAJour.add(idNettoye);

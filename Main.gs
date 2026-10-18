@@ -166,6 +166,16 @@ function construireConsole_(langue) {
   const config = lireConfiguration();
   template.seuilMois = String(config.SEUIL_INACTIVITE_MOIS);
   template.tailleLot = String(config.TAILLE_LOT_DECISIONS);
+
+  let inventaireInitial = { fichiers: [], totalInventaire: 0, totalDormantsSheet: 0, source: 'INVENTAIRE' };
+  try {
+    inventaireInitial = chargerMesFichiersInventaire();
+  } catch (erreur) {
+    console.warn('Chargement de l\'inventaire initial en échec :', erreur.message);
+  }
+  template.inventaireInitialJson = JSON.stringify(inventaireInitial);
+  template.ecranInitial = (inventaireInitial.fichiers && inventaireInitial.fichiers.length > 0) ? 'resultats' : 'accueil';
+
   return template.evaluate();
 }
 

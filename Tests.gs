@@ -33,7 +33,8 @@ function runAllTests() {
     test_CA09_fichierCorbeilleExclu,
     test_CA10_formuleDossierParent,
     test_CA11_protectionNomCommeFormule,
-    test_CA11_schemaInventaireControle
+    test_CA11_schemaInventaireControle,
+    test_CA12_chargementInventaireConsole
   ];
 
   let reussis = 0;
@@ -291,3 +292,33 @@ function test_CA11_schemaInventaireControle() {
   schemaInventaireVerifie_ = false;
   affirmer_(erreurLevee, 'Un inventaire non migré doit bloquer la lecture avec un message explicite.');
 }
+
+function test_CA12_chargementInventaireConsole() {
+  // Test extraction nom dossier parent
+  affirmer_(extraireNomDossierParent_('Mon Dossier') === 'Mon Dossier', 'Un nom brut doit être renvoyé tel quel');
+  affirmer_(extraireNomDossierParent_('=HYPERLINK("https://drive.google.com/folders/123", "Dossier Racine")') === 'Dossier Racine', 'Le nom doit être extrait de la formule HYPERLINK');
+  affirmer_(extraireNomDossierParent_('=LIEN_HYPERTEXTE("https://drive.google.com"; "Dossier ""2023""")') === 'Dossier "2023"', 'Les guillemets doublés doivent être dédoublés');
+  affirmer_(extraireNomDossierParent_('') === '', 'Une valeur vide doit renvoyer une chaîne vide');
+
+  // Test du filtrage statut et tri par taille
+  const faussesLignes = [
+    ['id_1', 'Petit.pdf', 'application/pdf', 2, new Date('2023-01-01'), 'user@test.fr', 'Dossier A', 'https://...', STATUTS_FICHIER.DORMANT, ''],
+    ['id_2', 'Gros.zip', 'application/zip', 150, new Date('2023-02-01'), 'user@test.fr', 'Dossier B', 'https://...', STATUTS_FICHIER.NOTIFIE, ''],
+    ['id_3', 'DejaCorbeille.pdf', 'application/pdf', 50, new Date('2023-01-01'), 'user@test.fr', 'Dossier C', 'https://...', STATUTS_FICHIER.CORBEILLE, new Date()],
+    ['id_4', 'Garde.pdf', 'application/pdf', 80, new Date('2023-01-01'), 'user@test.fr', 'Dossier D', 'https://...', STATUTS_FICHIER.LISTE_BLANCHE, new Date()]
+  ];
+
+  const ancienneFonction = typeof lireLignesInventaire_ === 'function' ? lireLignesInventaire_ : null;
+  try {
+    lireLignesInventaire_ = () => faussesLignes;
+    const res = chargerMesFichiersInventaire();
+    affirmer_(res.source === 'INVENTAIRE', 'La source doit être INVENTAIRE');
+    affirmer_(res.fichiers.length === 2, `Seuls les fichiers DORMANT et NOTIFIE doivent être chargés (obtenu : ${res.fichiers.length})`);
+    affirmer_(res.fichiers[0].id === 'id_2' && res.fichiers[0].tailleMo === 150, 'Les fichiers doivent être triés par taille décroissante');
+    affirmer_(res.fichiers[1].id === 'id_1' && res.fichiers[1].tailleMo === 2, 'Le deuxième fichier doit être le plus petit');
+    affirmer_(res.fichiers[0].dossierParent === 'Dossier B', 'Le nom du dossier parent doit être extrait');
+  } finally {
+    if (ancienneFonction) lireLignesInventaire_ = ancienneFonction;
+  }
+}
+

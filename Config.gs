@@ -7,7 +7,7 @@
 
 const CONFIGURATION_PAR_DEFAUT = Object.freeze({
   NOM_APPLICATION: 'Drive Sleep & Green FinOps',
-  VERSION: '1.3.1',
+  VERSION: '1.3.2',
   AUTEUR: 'Fabrice Faucheux',
   SITE_WEB: 'https://faucheux.bzh',
   DUREE_MAX_EXECUTION_MS: 240000, // 4 min : marge de 2 min sous la limite des 6 min (écritures + KPI)
@@ -149,6 +149,9 @@ const TEXTES_INTERFACE = Object.freeze({
     btnToutSelectionner: 'Tout cocher / décocher',
     btnMettreCorbeille: 'Mettre à la corbeille',
     btnGarder: 'Garder',
+    btnReanalyser: 'Analyser en direct',
+    btnRechargerInventaire: 'Recharger l\'inventaire',
+    badgeInventaire: '📋 {n} fichier(s) chargé(s) depuis l\'onglet Inventaire_Dormant.',
     aucunFichier: 'Bravo, aucun fichier en sommeil dans votre Drive !',
     aucunResultatFiltre: 'Aucun fichier ne correspond à votre recherche.',
     traitementEnCours: 'Traitement en cours, veuillez patienter…',
@@ -207,6 +210,9 @@ const TEXTES_INTERFACE = Object.freeze({
     btnToutSelectionner: 'Select / Deselect all',
     btnMettreCorbeille: 'Move to trash',
     btnGarder: 'Keep',
+    btnReanalyser: 'Scan live Drive',
+    btnRechargerInventaire: 'Reload inventory',
+    badgeInventaire: '📋 {n} dormant file(s) loaded from Inventaire_Dormant sheet.',
     aucunFichier: 'Well done, no dormant files in your Drive!',
     aucunResultatFiltre: 'No file matches your search.',
     traitementEnCours: 'Processing, please wait…',

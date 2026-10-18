@@ -40,6 +40,84 @@ function incrementerCompteursLibreService_(deltas) {
 /* ===================== Fonctions appelées par Ui.html (google.script.run) ===================== */
 
 /**
+ * Charge les fichiers dormants de l'utilisateur courant depuis l'onglet Inventaire_Dormant.
+ * Si la feuille contient des éléments pour cet utilisateur, ils sont renvoyés triés par taille décroissante.
+ * @returns {{fichiers: Object[], totalInventaire: number, totalDormantsSheet: number, source: string}}
+ */
+function chargerMesFichiersInventaire() {
+  try {
+    synchroniserStatutsCorbeilleInventaire_();
+  } catch (erreur) {
+    console.warn('Synchronisation préalable de la corbeille ignorée :', erreur.message);
+  }
+
+  const emailActif = ((Session.getActiveUser && Session.getActiveUser().getEmail()) || '').trim().toLowerCase();
+  const emailEffectif = ((Session.getEffectiveUser && Session.getEffectiveUser().getEmail()) || '').trim().toLowerCase();
+  const emailCourant = emailActif || emailEffectif;
+
+  const lignes = lireLignesInventaire_();
+  const fichiers = [];
+  let totalDormantsSheet = 0;
+
+  // Déterminer s'il n'y a qu'un seul propriétaire dans toute la feuille
+  const proprietairesUniques = new Set();
+  lignes.forEach((ligne) => {
+    const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim().toUpperCase();
+    if (statut === STATUTS_FICHIER.DORMANT || statut === STATUTS_FICHIER.NOTIFIE) {
+      totalDormantsSheet++;
+      const p = String(ligne[COLONNES_INVENTAIRE.PROPRIETAIRE] ?? '').trim().toLowerCase();
+      if (p) proprietairesUniques.add(p);
+    }
+  });
+
+  const monoUtilisateur = proprietairesUniques.size <= 1;
+
+  lignes.forEach((ligne) => {
+    const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim().toUpperCase();
+    if (statut !== STATUTS_FICHIER.DORMANT && statut !== STATUTS_FICHIER.NOTIFIE) return;
+
+    const id = String(ligne[COLONNES_INVENTAIRE.ID] ?? '').trim();
+    if (!id) return;
+
+    const proprietaireLigne = String(ligne[COLONNES_INVENTAIRE.PROPRIETAIRE] ?? '').trim().toLowerCase();
+
+    // En environnement mono-utilisateur ou si l'email n'est pas résolu, on accepte tout.
+    // En multi-utilisateurs avec email résolu, on filtre strictement sur l'utilisateur courant.
+    const estAUtilisateur = monoUtilisateur || !emailCourant || !proprietaireLigne || proprietaireLigne === emailCourant;
+    if (!estAUtilisateur) return;
+
+    const nom = String(ligne[COLONNES_INVENTAIRE.NOM] ?? '').trim();
+    const mimeType = String(ligne[COLONNES_INVENTAIRE.MIME_TYPE] ?? '').trim();
+    const tailleMo = Number(ligne[COLONNES_INVENTAIRE.TAILLE_MO]) || 0;
+    const url = /^https:\/\//i.test(String(ligne[COLONNES_INVENTAIRE.URL] ?? '')) ? String(ligne[COLONNES_INVENTAIRE.URL]).trim() : '';
+    const dateActivite = formaterDateFr_(ligne[COLONNES_INVENTAIRE.DERNIERE_ACTIVITE]);
+    const dossierBrut = ligne[COLONNES_INVENTAIRE.DOSSIER_PARENT];
+    const dossierParent = extraireNomDossierParent_(dossierBrut);
+
+    fichiers.push({
+      id: id,
+      nom: nom,
+      mimeType: mimeType,
+      tailleMo: tailleMo,
+      partage: false,
+      derniereActivite: dateActivite,
+      url: url,
+      dossierParent: dossierParent,
+      source: 'INVENTAIRE'
+    });
+  });
+
+  fichiers.sort((a, b) => (Number(b.tailleMo) || 0) - (Number(a.tailleMo) || 0));
+
+  return {
+    fichiers: fichiers,
+    totalInventaire: fichiers.length,
+    totalDormantsSheet: totalDormantsSheet,
+    source: 'INVENTAIRE'
+  };
+}
+
+/**
  * Analyse un lot du Drive de l'utilisateur (appel court, répété par la console tant qu'il reste des pages).
  * @param {Object} [parametres] { jetonPage?: string, dateLimiteIso?: string } renvoyés par l'appel précédent.
  * @returns {{fichiers: Object[], jetonSuivant: (string|null), dateLimiteIso: string, scannes: number}}
@@ -129,7 +207,7 @@ function annulerCorbeilleMesFichiers(ids) {
     nbCorbeille: -1,
     moCorbeille: '-taille',
     nbRestaures: 1
-  });
+  }, '');
   return { idsTraites: [...resultat.idsTraites, ...resultat.idsDejaFaits], idsEchecs: resultat.idsEchecs, moLiberes: -resultat.moTotal };
 }
 
@@ -230,8 +308,9 @@ function appliquerSurMesFichiers_(ids, regles, operation) {
  * @param {string} nouveauStatut Statut d'inventaire à appliquer.
  * @param {string[]} statutsModifiables Statuts d'inventaire remplaçables.
  * @param {Object} deltasParFichier Deltas par fichier ('taille' / '-taille' = taille du fichier en Mo).
+ * @param {Date|string} [dateTraitement=new Date()] Date de traitement à enregistrer (ou vide).
  */
-function enregistrerEffetsLibreService_(resultat, nouveauStatut, statutsModifiables, deltasParFichier) {
+function enregistrerEffetsLibreService_(resultat, nouveauStatut, statutsModifiables, deltasParFichier, dateTraitement = new Date()) {
   const idsASynchroniser = [...resultat.idsTraites, ...(resultat.idsDejaFaits || [])];
   if (idsASynchroniser.length === 0) return;
   const verrou = LockService.getScriptLock();
@@ -241,15 +320,12 @@ function enregistrerEffetsLibreService_(resultat, nouveauStatut, statutsModifiab
   }
   try {
     let idsInventaire = new Set();
-    if (estAdministrateur_()) {
-      try {
-        const maintenant = new Date();
-        const majParId = new Map(idsASynchroniser.map((id) => [id, { statut: nouveauStatut, date: maintenant }]));
-        idsInventaire = appliquerStatutsParId_(majParId, statutsModifiables);
-        if (idsInventaire.size > 0) mettreAJourTableauDeBord();
-      } catch (erreur) {
-        console.warn('Synchronisation de l\'inventaire impossible :', erreur.message);
-      }
+    try {
+      const majParId = new Map(idsASynchroniser.map((id) => [id, { statut: nouveauStatut, date: dateTraitement }]));
+      idsInventaire = appliquerStatutsParId_(majParId, statutsModifiables);
+      if (idsInventaire.size > 0) mettreAJourTableauDeBord();
+    } catch (erreur) {
+      console.warn('Synchronisation de l\'inventaire impossible :', erreur.message);
     }
 
     const totaux = {};
@@ -269,3 +345,20 @@ function enregistrerEffetsLibreService_(resultat, nouveauStatut, statutsModifiab
     verrou.releaseLock();
   }
 }
+
+/**
+ * Extrait le nom affichable du dossier parent, que la cellule contienne du texte ou une formule HYPERLINK.
+ * @param {*} valeur Valeur brute issue de la feuille.
+ * @returns {string} Nom du dossier parent ou vide.
+ */
+function extraireNomDossierParent_(valeur) {
+  if (!valeur) return '';
+  const chaine = String(valeur).trim();
+  if (!chaine.startsWith('=')) return chaine;
+  const correspondance = chaine.match(/[,;]\s*"((?:[^"]|"")*)"\s*\)$/);
+  if (correspondance) {
+    return correspondance[1].replace(/""/g, '"');
+  }
+  return '';
+}
+

@@ -528,7 +528,7 @@
     </div>
 
     <!-- Écran 1 : accueil -->
-    <section class="ecran actif" id="ecranAccueil">
+    <section class="ecran <?= ecranInitial === 'accueil' ? 'actif' : '' ?>" id="ecranAccueil">
       <div class="accueil-card">
         <h2 id="accueilTitre"></h2>
         <ul class="accueil-liste">
@@ -552,7 +552,7 @@
     </section>
 
     <!-- Écran 3 : résultats -->
-    <section class="ecran" id="ecranResultats">
+    <section class="ecran <?= ecranInitial === 'resultats' ? 'actif' : '' ?>" id="ecranResultats">
       <div class="kpi-grid">
         <div class="kpi-card">
           <div class="kpi-header"><span class="kpi-label" id="lblFichiers"></span><span class="kpi-icon">🗂️</span></div>
@@ -581,6 +581,8 @@
           <button class="btn btn-tonal" id="btnTout" onclick="toutSelectionner()"><span>☑️</span><span id="txtBtnTout"></span></button>
           <button class="btn btn-secondary" id="btnGarder" onclick="garderSelection()"><span>🛡️</span><span id="txtBtnGarder"></span></button>
           <button class="btn btn-danger" id="btnCorbeille" onclick="demanderConfirmationCorbeille()"><span>🗑️</span><span id="txtBtnCorbeille"></span></button>
+          <button class="btn btn-tonal" id="btnReanalyser" onclick="lancerAnalyse(false)"><span>🔄</span><span id="txtBtnReanalyser"></span></button>
+          <button class="btn btn-tonal" id="btnRechargerInventaire" onclick="rechargerDepuisInventaire()" style="display:none;"><span>📋</span><span id="txtBtnRechargerInventaire"></span></button>
         </div>
         <div class="search-box">
           <span class="search-icon">🔍</span>
@@ -613,12 +615,14 @@
     const SEUIL_MOIS = '<?= seuilMois ?>';
     const TAILLE_LOT = Number('<?= tailleLot ?>') || 100;
     const MO_PAR_PHOTO = 3;
+    const DONNEES_INITIALES = <?!= inventaireInitialJson ?>;
     const langueServeur = '<?= langueInitiale ?>';
     let langueCourante = (langueServeur === 'en' || langueServeur === 'fr') ? langueServeur : 'fr';
 
     const etat = {
-      ecran: 'accueil',
+      ecran: '<?= ecranInitial ?>',
       fichiers: [],
+      source: 'INVENTAIRE',
       jeton: null,
       dateLimiteIso: null,
       scannes: 0,
@@ -669,7 +673,10 @@
     function basculerLangue() {
       langueCourante = langueCourante === 'fr' ? 'en' : 'fr';
       appliquerTextes();
-      if (etat.ecran === 'resultats') rendreResultats();
+      if (etat.ecran === 'resultats') {
+        majBoutonsSource();
+        rendreResultats();
+      }
       if (etat.ecran === 'analyse') majProgression();
     }
 
@@ -695,11 +702,14 @@
       fixer('txtBtnTout', x.btnToutSelectionner);
       fixer('txtBtnGarder', x.btnGarder);
       fixer('txtBtnCorbeille', x.btnMettreCorbeille);
+      fixer('txtBtnReanalyser', x.btnReanalyser);
+      fixer('txtBtnRechargerInventaire', x.btnRechargerInventaire);
       fixer('dialogTitre', x.titreModalCorbeille);
       fixer('btnDialogAnnuler', x.btnAnnuler);
       fixer('btnDialogConfirmer', x.btnConfirmer);
       document.getElementById('inputFiltre').placeholder = x.placeholderFiltre;
       document.getElementById('btnLangue').textContent = langueCourante.toUpperCase() + ' ⇄ ' + (langueCourante === 'fr' ? 'EN' : 'FR');
+      majBoutonsSource();
       rendreFaq('faqAccueil');
       rendreFaq('faqResultats');
     }
@@ -732,6 +742,7 @@
     function lancerAnalyse(continuer) {
       if (!continuer) {
         etat.fichiers = [];
+        etat.source = 'DRIVE_DIRECT';
         etat.jeton = null;
         etat.dateLimiteIso = null;
         etat.scannes = 0;
@@ -784,7 +795,45 @@
       etat.fichiers.sort((a, b) => (Number(b.tailleMo) || 0) - (Number(a.tailleMo) || 0));
       afficherEcran('resultats');
       masquerMessage();
+      majBoutonsSource();
       rendreResultats();
+    }
+
+    function majBoutonsSource() {
+      const btnReanalyser = document.getElementById('btnReanalyser');
+      const btnRecharger = document.getElementById('btnRechargerInventaire');
+      if (btnReanalyser) {
+        btnReanalyser.style.display = (etat.source === 'INVENTAIRE') ? 'inline-flex' : 'none';
+      }
+      if (btnRecharger) {
+        btnRecharger.style.display = (etat.source === 'DRIVE_DIRECT') ? 'inline-flex' : 'none';
+      }
+    }
+
+    function rechargerDepuisInventaire() {
+      definirEtatBoutons(true);
+      afficherMessage(t().traitementEnCours, false);
+      google.script.run
+        .withSuccessHandler((res) => {
+          definirEtatBoutons(false);
+          if (res && Array.isArray(res.fichiers) && res.fichiers.length > 0) {
+            etat.fichiers = res.fichiers.slice();
+            etat.source = 'INVENTAIRE';
+            etat.jeton = null;
+            etat.dateLimiteIso = null;
+            etat.selection.clear();
+            terminerAnalyse();
+            afficherMessage(formater(t().badgeInventaire, { n: res.fichiers.length }), false);
+          } else {
+            afficherMessage(t().aucunFichier, false);
+            afficherEcran('accueil');
+          }
+        })
+        .withFailureHandler((err) => {
+          definirEtatBoutons(false);
+          afficherMessage(`${t().erreurServeur} ${err.message || err}`, true);
+        })
+        .chargerMesFichiersInventaire();
     }
 
     /* ---------- Résultats ---------- */
@@ -901,6 +950,9 @@
         badges.className = 'file-badges';
         const listeBadges = [[type.libelle, 'badge badge-type'], [`💾 ${formaterVolume(Number(f.tailleMo) || 0)}`, 'badge'], [`🕒 ${x.inactifDepuis} ${f.derniereActivite}`, 'badge']];
         if (f.partage) listeBadges.push([x.badgePartage, 'badge badge-partage']);
+        if (f.dossierParent && !f.dossierParent.startsWith('=')) {
+          listeBadges.push([`📁 ${f.dossierParent}`, 'badge']);
+        }
         listeBadges
           .forEach(([texte, classe]) => {
             const badge = document.createElement('span');
@@ -1036,8 +1088,9 @@
     }
 
     function definirEtatBoutons(desactive) {
-      ['btnCorbeille', 'btnGarder', 'btnTout', 'inputFiltre', 'btnContinuer'].forEach((id) => {
-        document.getElementById(id).disabled = desactive;
+      ['btnCorbeille', 'btnGarder', 'btnTout', 'inputFiltre', 'btnContinuer', 'btnReanalyser', 'btnRechargerInventaire'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = desactive;
       });
       if (!desactive) recalculerKpi();
     }
@@ -1069,7 +1122,19 @@
       document.getElementById('messageStatut').style.display = 'none';
     }
 
-    window.addEventListener('DOMContentLoaded', appliquerTextes);
+    function initialiserConsole() {
+      appliquerTextes();
+      if (DONNEES_INITIALES && Array.isArray(DONNEES_INITIALES.fichiers) && DONNEES_INITIALES.fichiers.length > 0) {
+        etat.fichiers = DONNEES_INITIALES.fichiers.slice();
+        etat.source = 'INVENTAIRE';
+        terminerAnalyse();
+        afficherMessage(formater(t().badgeInventaire, { n: etat.fichiers.length }), false);
+      } else {
+        afficherEcran('accueil');
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', initialiserConsole);
   </script>
 </body>
 </html>
