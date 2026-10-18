@@ -7,6 +7,19 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [1.3.1] - 2026-10-18
+
+### 🎯 Angle émotionnel : L'angle douleur — La fin de la navigation à l'aveugle
+> *Retrouver un vieux document dormant de 50 Mo dans un tableau d'inventaire, c'est bien. Mais devoir deviner d'où il sort, dans quel projet enfoui ou quel dossier partagé il réside avant d'oser le supprimer ou le classer, c'était le cauchemar du nettoyage. Avec le lien direct vers le dossier parent intégré à chaque ligne d'inventaire, vous ouvrez son contexte en un seul clic sans plus jamais chercher dans le vide.*
+
+### Ajouté / Added
+- **Colonne « Dossier_Parent » avec lien direct** : Nouvelle colonne dans la feuille `Inventaire_Dormant` affichant le nom du dossier conteneur formaté sous forme de lien cliquable direct (`=HYPERLINK(...)`) vers Google Drive.
+- **Résolution optimisée avec cache mémoire** : Récupération du nom réel du dossier via Drive API avec mise en cache (`cacheDossiersParent`) pour minimiser les requêtes, et repli vers `Mon Drive` pour les fichiers situés à la racine.
+- **Migration automatique non destructive** : Si un classeur existant possède déjà une feuille `Inventaire_Dormant` avec 9 colonnes, la colonne `Dossier_Parent` est automatiquement insérée à l'emplacement idoine sans altérer les données existantes.
+- **Suite de tests** : Ajout du test unitaire `test_CA10_formuleDossierParent` et renforcement de `test_CA05_constantesColonnes`.
+
+---
+
 ## [1.3.0] - 2026-10-18
 
 ### 🎯 Angle émotionnel : Le pouvoir redonné au collaborateur

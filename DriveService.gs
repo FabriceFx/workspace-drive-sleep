@@ -74,6 +74,13 @@ function evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, cont
     ? fichier.owners[0].emailAddress
     : ctx.emailParDefaut;
 
+  const resoudreParent = (contexte && typeof contexte.resoudreDossierParent === 'function')
+    ? contexte.resoudreDossierParent
+    : null;
+  const dossierParent = resoudreParent
+    ? resoudreParent(fichier)
+    : formaterFormuleDossierParentDefaut_(fichier);
+
   return {
     id: fichier.id,
     nom: fichier.name || 'Sans titre',
@@ -83,8 +90,71 @@ function evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, cont
     derniereActiviteDate: derniereActivite,
     derniereActiviteIso: Utilities.formatDate(derniereActivite, ctx.fuseau, 'dd/MM/yyyy'),
     proprietaire: String(emailProprietaire).toLowerCase(),
-    url: fichier.webViewLink || `https://drive.google.com/open?id=${fichier.id}`
+    url: fichier.webViewLink || `https://drive.google.com/open?id=${fichier.id}`,
+    dossierParent
   };
+}
+
+/**
+ * Formate une formule de repli vers le dossier parent sans appel d'API (ou pour tests).
+ * @param {Object} fichier Objet fichier.
+ * @returns {string} Formule =HYPERLINK("...", "...").
+ */
+function formaterFormuleDossierParentDefaut_(fichier) {
+  if (!fichier || !Array.isArray(fichier.parents) || fichier.parents.length === 0) {
+    return '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")';
+  }
+  const idParent = String(fichier.parents[0]).trim();
+  if (!idParent || idParent === 'root') {
+    return '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")';
+  }
+  const nom = (fichier.parentName ? String(fichier.parentName).trim() : 'Dossier').replace(/"/g, () => '""');
+  const url = `https://drive.google.com/drive/folders/${idParent}`.replace(/"/g, () => '""');
+  return `=HYPERLINK("${url}", "${nom}")`;
+}
+
+/**
+ * Construit la formule HYPERLINK pour le dossier parent d'un fichier avec résolution de son nom
+ * et mise en cache mémoire pour limiter drastiquement les requêtes Drive API.
+ * @param {Object} fichier Fichier retourné par Drive API.
+ * @param {Map<string, string>} [cache] Cache idDossier -> formule HYPERLINK.
+ * @returns {string} Formule =HYPERLINK("...", "...").
+ */
+function resoudreFormuleDossierParent_(fichier, cache) {
+  if (!fichier || !Array.isArray(fichier.parents) || fichier.parents.length === 0) {
+    return '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")';
+  }
+  const idParent = String(fichier.parents[0]).trim();
+  if (!idParent || idParent === 'root') {
+    return '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")';
+  }
+  if (cache && cache.has(idParent)) {
+    return cache.get(idParent);
+  }
+
+  let nom = 'Dossier';
+  let url = `https://drive.google.com/drive/folders/${idParent}`;
+  try {
+    const meta = executerAvecRetry_(() => Drive.Files.get(idParent, {
+      fields: 'name, webViewLink',
+      supportsAllDrives: true
+    }));
+    if (meta) {
+      if (meta.name) nom = String(meta.name).trim();
+      if (meta.webViewLink) url = String(meta.webViewLink).trim();
+    }
+  } catch (erreur) {
+    console.warn(`Impossible de récupérer les métadonnées du dossier parent ${idParent} :`, erreur.message);
+  }
+
+  const nomEchappe = nom.replace(/"/g, () => '""');
+  const urlEchappee = url.replace(/"/g, () => '""');
+  const formule = `=HYPERLINK("${urlEchappee}", "${nomEchappe}")`;
+
+  if (cache) {
+    cache.set(idParent, formule);
+  }
+  return formule;
 }
 
 /**
@@ -237,9 +307,11 @@ function executerCycleAudit_() {
   const idsExclus = new Set([...idsListeBlanche, ...chargerIdsInventaireExistants_()]);
   const estSousDossierProtege = construireVerificateurDossiersProteges_(idsListeBlanche);
   const estDansDossierCorbeille = construireVerificateurDossiersCorbeille_();
+  const cacheDossiersParent = new Map();
   const contexte = {
     fuseau: obtenirFuseau_(),
-    emailParDefaut: (Session.getEffectiveUser().getEmail() || '').toLowerCase()
+    emailParDefaut: (Session.getEffectiveUser().getEmail() || '').toLowerCase(),
+    resoudreDossierParent: (f) => resoudreFormuleDossierParent_(f, cacheDossiersParent)
   };
 
   let jetonPage = props.getProperty(CLES_PROPRIETES.JETON_PAGE_DRIVE) || null;
@@ -294,6 +366,7 @@ function executerCycleAudit_() {
       nouvelleLigne[COLONNES_INVENTAIRE.TAILLE_MO] = candidat.tailleMo;
       nouvelleLigne[COLONNES_INVENTAIRE.DERNIERE_ACTIVITE] = candidat.derniereActiviteDate;
       nouvelleLigne[COLONNES_INVENTAIRE.PROPRIETAIRE] = candidat.proprietaire;
+      nouvelleLigne[COLONNES_INVENTAIRE.DOSSIER_PARENT] = candidat.dossierParent;
       nouvelleLigne[COLONNES_INVENTAIRE.URL] = candidat.url;
       nouvelleLigne[COLONNES_INVENTAIRE.STATUT] = STATUTS_FICHIER.DORMANT;
       nouvelleLigne[COLONNES_INVENTAIRE.DATE_TRAITEMENT] = '';

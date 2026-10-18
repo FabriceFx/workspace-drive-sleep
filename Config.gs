@@ -2,12 +2,12 @@
  * @fileoverview Configuration globale, constantes et dictionnaire bilingue FR/EN.
  * Projet : Drive Sleep & Green FinOps (workspace-drive-sleep)
  * Auteur : Fabrice Faucheux (FF Labs - faucheux.bzh)
- * Version : 1.3.0
+ * Version : 1.3.1
  */
 
 const CONFIGURATION_PAR_DEFAUT = Object.freeze({
   NOM_APPLICATION: 'Drive Sleep & Green FinOps',
-  VERSION: '1.3.0',
+  VERSION: '1.3.1',
   AUTEUR: 'Fabrice Faucheux',
   SITE_WEB: 'https://faucheux.bzh',
   DUREE_MAX_EXECUTION_MS: 240000, // 4 min : marge de 2 min sous la limite des 6 min (écritures + KPI)
@@ -53,9 +53,10 @@ const COLONNES_INVENTAIRE = Object.freeze({
   TAILLE_MO: 3,
   DERNIERE_ACTIVITE: 4,
   PROPRIETAIRE: 5,
-  URL: 6,
-  STATUT: 7,
-  DATE_TRAITEMENT: 8
+  DOSSIER_PARENT: 6,
+  URL: 7,
+  STATUT: 8,
+  DATE_TRAITEMENT: 9
 });
 
 const COLONNES_LISTE_BLANCHE = Object.freeze({

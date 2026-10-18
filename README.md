@@ -26,6 +26,7 @@
 - **🛡️ Sécurité anti-perte absolue** : Déplace les fichiers vers la corbeille Google Drive (`trashed = true`, restaurable sous 30 jours) et permet de sanctuariser des documents ou des dossiers entiers, sous-dossiers compris, via une feuille `Liste_Blanche`. Chaque utilisateur ne peut agir que sur ses propres fichiers (contrôle côté serveur).
 - **📊 Tableau de bord Green IT & FinOps** : Consolide en continu le nombre de fichiers traités, les gigaoctets libérés, les kilogrammes de CO2 évités et les économies budgétaires estimées.
 - **✉️ Bilan de sobriété numérique par e-mail** : Envoi de bilans personnalisés aux propriétaires avec respect strict des quotas journaliers `MailApp`.
+- **📁 Contexte immédiat & lien dossier parent / Parent folder context & direct link** : Chaque fichier inventorié affiche le nom de son dossier parent formaté sous forme de lien cliquable direct (`=HYPERLINK(...)`) pour situer immédiatement le document dans son arborescence avant toute décision. / *Each audited file displays its parent folder name as a direct clickable link (`=HYPERLINK(...)`) to immediately inspect file context in Drive before taking action.*
 - **🧪 Suite de tests unitaires intégrée** : Tests automatisés dans [Tests.gs](Tests.gs) (`runAllTests()`) pour valider le filtrage, les quotas, le retry et la sécurité HTML.
 
 ---

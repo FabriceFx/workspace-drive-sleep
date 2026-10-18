@@ -88,8 +88,7 @@ function initialiserFeuilleConfiguration_(classeur) {
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} classeur
  */
 function initialiserFeuilleInventaire_(classeur) {
-  if (classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE)) return;
-  const feuille = classeur.insertSheet(NOMS_FEUILLES.INVENTAIRE);
+  let feuille = classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE);
   const enTetes = [[
     'ID_Fichier',
     'Nom',
@@ -97,14 +96,30 @@ function initialiserFeuilleInventaire_(classeur) {
     'Taille_Mo',
     'Derniere_Activite',
     'Proprietaire',
+    'Dossier_Parent',
     'URL',
     'Statut',
     'Date_Traitement'
   ]];
-  feuille.getRange(1, 1, 1, enTetes[0].length).setValues(enTetes).setFontWeight('bold').setBackground('#fce8e6');
-  feuille.getRange('E:E').setNumberFormat('dd/MM/yyyy');
-  feuille.getRange('I:I').setNumberFormat('dd/MM/yyyy');
-  feuille.setFrozenRows(1);
+  if (!feuille) {
+    feuille = classeur.insertSheet(NOMS_FEUILLES.INVENTAIRE);
+    feuille.getRange(1, 1, 1, enTetes[0].length).setValues(enTetes).setFontWeight('bold').setBackground('#fce8e6');
+    feuille.getRange('E:E').setNumberFormat('dd/MM/yyyy');
+    feuille.getRange('J:J').setNumberFormat('dd/MM/yyyy');
+    feuille.setFrozenRows(1);
+    return;
+  }
+  // Migration automatique si la colonne Dossier_Parent est absente de la feuille existante
+  const colDossier = Object.keys(COLONNES_INVENTAIRE).length;
+  if (feuille.getLastColumn() < colDossier) {
+    const enTetesActuels = feuille.getRange(1, 1, 1, Math.max(feuille.getLastColumn(), 1)).getValues()[0].map(String);
+    if (!enTetesActuels.some((h) => /dossier/i.test(h))) {
+      feuille.insertColumnAfter(COLONNES_INVENTAIRE.PROPRIETAIRE + 1);
+      feuille.getRange(1, COLONNES_INVENTAIRE.DOSSIER_PARENT + 1).setValue('Dossier_Parent').setFontWeight('bold').setBackground('#fce8e6');
+      feuille.getRange('J:J').setNumberFormat('dd/MM/yyyy');
+      console.info('Colonne Dossier_Parent insérée dans Inventaire_Dormant existant.');
+    }
+  }
 }
 
 /**

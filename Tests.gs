@@ -28,7 +28,8 @@ function runAllTests() {
     test_CA07_dateLimiteClientValidee,
     test_CA08_dateLimiteFinDeMois,
     test_CA08_fichierPartageSignale,
-    test_CA09_fichierCorbeilleExclu
+    test_CA09_fichierCorbeilleExclu,
+    test_CA10_formuleDossierParent
   ];
 
   let reussis = 0;
@@ -149,6 +150,8 @@ function test_CA04_calculKpiTableauDeBord() {
 
 function test_CA05_constantesColonnes() {
   affirmer_(typeof COLONNES_INVENTAIRE.ID === 'number', 'COLONNES_INVENTAIRE.ID doit être défini');
+  affirmer_(COLONNES_INVENTAIRE.DOSSIER_PARENT === 6, 'COLONNES_INVENTAIRE.DOSSIER_PARENT doit être à l\'indice 6');
+  affirmer_(COLONNES_INVENTAIRE.URL === 7, 'COLONNES_INVENTAIRE.URL doit être à l\'indice 7');
   affirmer_(COLONNES_INVENTAIRE.DATE_TRAITEMENT === COLONNES_INVENTAIRE.STATUT + 1, 'Statut et Date_Traitement doivent être adjacents (écriture groupée).');
   affirmer_(typeof COLONNES_LISTE_BLANCHE.MOTIF === 'number', 'COLONNES_LISTE_BLANCHE.MOTIF doit être défini');
 }
@@ -221,4 +224,22 @@ function test_CA09_fichierCorbeilleExclu() {
 
   const fichierExplicitCorbeille = { id: 'id_exp', name: 'vieux2.pdf', mimeType: 'application/pdf', size: String(10 * 1024 * 1024), modifiedTime: '2022-01-01T00:00:00Z', explicitlyTrashed: true };
   affirmer_(evaluerEligibiliteFichier_(fichierExplicitCorbeille, config, dateLimite, new Set(), CONTEXTE_TEST_) === null, 'Un fichier avec explicitlyTrashed: true doit être exclu.');
+}
+
+function test_CA10_formuleDossierParent() {
+  const racine = formaterFormuleDossierParentDefaut_({});
+  affirmer_(racine === '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")', 'Sans parent, le lien doit pointer vers Mon Drive');
+
+  const racineRoot = formaterFormuleDossierParentDefaut_({ parents: ['root'] });
+  affirmer_(racineRoot === '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")', 'Le dossier root doit pointer vers Mon Drive');
+
+  const dossierSimple = formaterFormuleDossierParentDefaut_({ parents: ['folder_123'] });
+  affirmer_(dossierSimple === '=HYPERLINK("https://drive.google.com/drive/folders/folder_123", "Dossier")', 'Par défaut, le dossier parent doit avoir le nom Dossier');
+
+  const dossierNomme = formaterFormuleDossierParentDefaut_({ parents: ['folder_456'], parentName: 'Rapports "Financiers"' });
+  affirmer_(dossierNomme === '=HYPERLINK("https://drive.google.com/drive/folders/folder_456", "Rapports ""Financiers""")', 'Les guillemets du nom de dossier doivent être échappés en double');
+
+  const cache = new Map([['folder_cached', '=HYPERLINK("https://drive.google.com/drive/folders/folder_cached", "CacheTest")']]);
+  const depuisCache = resoudreFormuleDossierParent_({ parents: ['folder_cached'] }, cache);
+  affirmer_(depuisCache === '=HYPERLINK("https://drive.google.com/drive/folders/folder_cached", "CacheTest")', 'Le cache mémoire doit être prioritaire');
 }
