@@ -169,6 +169,10 @@ const TEXTES_INTERFACE = Object.freeze({
     erreurServeur: 'Une erreur est survenue :',
     placeholderFiltre: 'Rechercher par nom ou type (ex. pdf, vidéo)…',
     ouvrir: 'Ouvrir',
+    btnAide: 'Aide',
+    titreModalFaq: 'Questions fréquentes',
+    btnFermerFaq: 'Fermer',
+    lienFaq: 'Une question ? Consultez la FAQ',
     faqTitre: 'Questions fréquentes',
     faq: [
       { q: 'Puis-je récupérer un fichier ?', a: 'Oui. Juste après l\'action, cliquez sur « Annuler ». Ensuite, ouvrez Google Drive > Corbeille, faites un clic droit sur le fichier puis « Restaurer » (pendant 30 jours).' },
@@ -230,6 +234,10 @@ const TEXTES_INTERFACE = Object.freeze({
     erreurServeur: 'An error occurred:',
     placeholderFiltre: 'Search by name or type (e.g. pdf, video)…',
     ouvrir: 'Open',
+    btnAide: 'Help',
+    titreModalFaq: 'Frequently asked questions',
+    btnFermerFaq: 'Close',
+    lienFaq: 'Any questions? Check the FAQ',
     faqTitre: 'FAQ',
     faq: [
       { q: 'Can I get a file back?', a: 'Yes. Right after the action, click “Undo”. Later, open Google Drive > Trash, right-click the file and choose “Restore” (within 30 days).' },

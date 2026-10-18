@@ -92,6 +92,33 @@
       color: var(--md-sys-color-on-surface-variant);
     }
 
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-aide-chip {
+      background: var(--md-sys-color-surface-container);
+      color: var(--md-sys-color-on-surface);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: var(--md-sys-shape-corner-full);
+      padding: 6px 14px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    .btn-aide-chip:hover {
+      background: var(--md-sys-color-surface-container-high);
+      border-color: var(--md-sys-color-outline);
+    }
+
     .lang-chip {
       background: var(--md-sys-color-surface-container);
       color: var(--md-sys-color-on-surface);
@@ -282,11 +309,11 @@
       border: 1px solid var(--md-sys-color-outline-variant);
       overflow: hidden;
       flex: 1;
-      min-height: 140px;
+      min-height: 280px;
       display: flex;
       flex-direction: column;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-      margin-bottom: 2px;
+      margin-bottom: 0;
     }
 
     .list-scroll {
@@ -507,13 +534,88 @@
     .texte-progression { color: var(--md-sys-color-on-surface-variant); font-size: 14px; margin-bottom: 16px; }
     .bandeau-continuer { display: none; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-secondary-container); font-size: 14px; }
     .toast-banner .btn-annuler { margin-left: auto; background: transparent; border: 1px solid currentColor; color: inherit; padding: 4px 14px; border-radius: 16px; cursor: pointer; font-weight: 600; }
-    .faq { background: var(--md-sys-color-surface); border-radius: var(--md-sys-shape-corner-large); padding: 12px 20px; font-size: 14px; }
-    .faq h3 { margin: 4px 0 8px; font-size: 15px; }
-    .faq details { border-top: 1px solid var(--md-sys-color-outline-variant); padding: 8px 0; }
-    .faq summary { cursor: pointer; font-weight: 500; }
-    .faq p { margin: 8px 0 0; color: var(--md-sys-color-on-surface-variant); line-height: 1.5; }
+    .faq {
+      background: var(--md-sys-color-surface);
+      border-radius: var(--md-sys-shape-corner-large);
+      padding: 12px 20px;
+      font-size: 13px;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .faq h3 { margin: 2px 0 6px; font-size: 14px; }
+    .faq details { border-top: 1px solid var(--md-sys-color-outline-variant); padding: 6px 0; }
+    .faq summary { cursor: pointer; font-weight: 500; font-size: 13px; }
+    .faq p { margin: 6px 0 0; color: var(--md-sys-color-on-surface-variant); line-height: 1.45; font-size: 12px; }
     .badge-partage { background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
     #dialogMessage { white-space: pre-line; }
+
+    /* Modal FAQ & pied de page */
+    dialog.dialog-faq {
+      max-width: 580px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 24px;
+    }
+
+    .faq-dialog-body {
+      overflow-y: auto;
+      max-height: 55vh;
+      margin-bottom: 16px;
+      padding-right: 6px;
+    }
+
+    .faq-dialog-body details {
+      border-top: 1px solid var(--md-sys-color-outline-variant);
+      padding: 8px 0;
+    }
+
+    .faq-dialog-body details:first-child {
+      border-top: none;
+    }
+
+    .faq-dialog-body summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--md-sys-color-on-surface);
+      outline: none;
+    }
+
+    .faq-dialog-body p {
+      margin: 6px 0 0 14px;
+      font-size: 12px;
+      color: var(--md-sys-color-on-surface-variant);
+      line-height: 1.5;
+    }
+
+    .resultats-footer {
+      flex-shrink: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2px 0 0 0;
+    }
+
+    .btn-lien-faq {
+      background: none;
+      border: none;
+      color: var(--md-sys-color-on-surface-variant);
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: var(--md-sys-shape-corner-full);
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+
+    .btn-lien-faq:hover {
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-primary);
+    }
   </style>
 </head>
 <body>
@@ -524,7 +626,10 @@
         <h1 id="titreConsole">🌱</h1>
         <p id="sousTitreConsole"></p>
       </div>
-      <button class="lang-chip" id="btnLangue" onclick="basculerLangue()">FR / EN</button>
+      <div class="header-actions">
+        <button class="btn-aide-chip" id="btnAide" onclick="ouvrirModalFaq()" type="button"><span>❓</span><span id="txtBtnAide"></span></button>
+        <button class="lang-chip" id="btnLangue" onclick="basculerLangue()" type="button">FR / EN</button>
+      </div>
     </div>
 
     <!-- Écran 1 : accueil -->
@@ -596,7 +701,12 @@
         <div class="list-scroll" id="listeFichiers"></div>
       </div>
 
-      <div class="faq" id="faqResultats"></div>
+      <div class="resultats-footer">
+        <button class="btn-lien-faq" id="btnLienFaq" onclick="ouvrirModalFaq()" type="button">
+          <span>❓</span>
+          <span id="txtLienFaq"></span>
+        </button>
+      </div>
     </section>
   </div>
 
@@ -607,6 +717,18 @@
     <div class="dialog-actions">
       <button class="btn btn-tonal" id="btnDialogAnnuler" onclick="fermerModalConfirmation()"></button>
       <button class="btn btn-danger" id="btnDialogConfirmer" onclick="confirmerCorbeille()"></button>
+    </div>
+  </dialog>
+
+  <!-- Modal FAQ / Aide -->
+  <dialog id="modalFaq" class="dialog-faq">
+    <div class="dialog-title" style="color: var(--md-sys-color-primary);">
+      <span>❓</span>
+      <span id="dialogFaqTitre"></span>
+    </div>
+    <div class="dialog-body faq-dialog-body" id="faqModalContenu"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-tonal" id="btnDialogFaqFermer" onclick="fermerModalFaq()" type="button"></button>
     </div>
   </dialog>
 
@@ -704,6 +826,10 @@
       fixer('txtBtnCorbeille', x.btnMettreCorbeille);
       fixer('txtBtnReanalyser', x.btnReanalyser);
       fixer('txtBtnRechargerInventaire', x.btnRechargerInventaire);
+      fixer('txtBtnAide', x.btnAide);
+      fixer('dialogFaqTitre', x.titreModalFaq);
+      fixer('btnDialogFaqFermer', x.btnFermerFaq);
+      fixer('txtLienFaq', x.lienFaq);
       fixer('dialogTitre', x.titreModalCorbeille);
       fixer('btnDialogAnnuler', x.btnAnnuler);
       fixer('btnDialogConfirmer', x.btnConfirmer);
@@ -711,16 +837,27 @@
       document.getElementById('btnLangue').textContent = langueCourante.toUpperCase() + ' ⇄ ' + (langueCourante === 'fr' ? 'EN' : 'FR');
       majBoutonsSource();
       rendreFaq('faqAccueil');
-      rendreFaq('faqResultats');
+      rendreFaq('faqModalContenu');
+    }
+
+    function ouvrirModalFaq() {
+      document.getElementById('modalFaq').showModal();
+    }
+
+    function fermerModalFaq() {
+      document.getElementById('modalFaq').close();
     }
 
     function rendreFaq(idConteneur) {
       const x = t();
       const conteneur = document.getElementById(idConteneur);
+      if (!conteneur) return;
       conteneur.textContent = '';
-      const titre = document.createElement('h3');
-      titre.textContent = '❓ ' + x.faqTitre;
-      conteneur.appendChild(titre);
+      if (idConteneur === 'faqAccueil') {
+        const titre = document.createElement('h3');
+        titre.textContent = '❓ ' + x.faqTitre;
+        conteneur.appendChild(titre);
+      }
       (x.faq || []).forEach((item) => {
         const details = document.createElement('details');
         const resume = document.createElement('summary');
