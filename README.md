@@ -71,10 +71,11 @@ Créez votre fichier local `.clasp.json` (automatiquement exclu de Git via `.git
 clasp push
 ```
 
-### 4. Première exécution dans Google Sheets
-1. Ouvrez le classeur Google Sheets lié.
-2. Cliquez sur le menu personnalisé **🌱 Sobriété Drive > 1. Initialiser / Vérifier les feuilles**.
-3. Les 4 onglets (`Configuration`, `Inventaire_Dormant`, `Liste_Blanche`, `Tableau_de_Bord`) sont générés et prêts à l'emploi.
+### 4. Première exécution dans Google Sheets / First run in Google Sheets
+1. Ouvrez le classeur Google Sheets lié. / *Open the linked Google Spreadsheet.*
+2. Cliquez sur le menu personnalisé **🌱 Sobriété Drive > 1. Initialiser / Vérifier les feuilles**. / *Click **🌱 Drive Sleep > 1. Initialize / Verify sheets**.*
+3. Les 4 onglets (`Configuration`, `Inventaire_Dormant`, `Liste_Blanche`, `Tableau_de_Bord`) sont générés et prêts à l'emploi. / *All 4 sheets are created and ready.*
+4. *(Optionnel / Optional)* Ajustez vos paramètres dans l'onglet `Configuration` : seuil d'inactivité (`SEUIL_INACTIVITE_MOIS`), taille minimale (`TAILLE_MIN_MO`, accepte les décimales ex. `0.1` ou `0,1`), ou `IGNORER_CONSULTATION` (`OUI` pour ne cibler que la date de modification réelle sans tenir compte des ouvertures Drive). / *Tune thresholds in `Configuration`: inactivity duration, minimum size, or `IGNORER_CONSULTATION` (`OUI` to target modification dates only).*
 
 ---
 
