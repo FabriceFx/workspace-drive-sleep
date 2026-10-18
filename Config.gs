@@ -14,7 +14,8 @@ const CONFIGURATION_PAR_DEFAUT = Object.freeze({
   DUREE_MAX_DECISIONS_MS: 240000, // budget d'un appel google.script.run de mise à la corbeille
   DUREE_MAX_ANALYSE_APPEL_MS: 20000, // analyse de la console : appels courts répétés par la page
   TAILLE_LOT_DECISIONS: 100, // nombre maximal d'ID traités par appel depuis la console
-  TAILLE_PAGE_DRIVE: 500, // Drive API v3 accepte jusqu'à 1000
+  TAILLE_PAGE_DRIVE: 200, // pages légères : chaque nouveau dossier coûte un appel Drive (max API : 1000)
+  DUREE_LIMITE_PAGE_MS: 300000, // 5 min : au-delà, la page en cours est abandonnée puis rejouée à la reprise
   DUREE_VALIDITE_VERROU_AUDIT_MS: 6.5 * 60 * 1000,
   MAX_ECHECS_REPRISE: 3, // reprises automatiques après erreur avant abandon de la campagne
   SEUIL_INACTIVITE_MOIS: 12,
@@ -58,6 +59,25 @@ const COLONNES_INVENTAIRE = Object.freeze({
   STATUT: 8,
   DATE_TRAITEMENT: 9
 });
+
+/** En-têtes attendus de l'onglet Inventaire_Dormant (format v1.3.1, 10 colonnes). */
+const ENTETES_INVENTAIRE = Object.freeze([
+  'ID_Fichier',
+  'Nom',
+  'Type_MIME',
+  'Taille_Mo',
+  'Derniere_Activite',
+  'Proprietaire',
+  'Dossier_Parent',
+  'URL',
+  'Statut',
+  'Date_Traitement'
+]);
+
+/** En-têtes de l'ancien format (v1.0 à v1.3.0, 9 colonnes), reconnus pour la migration automatique. */
+const ENTETES_INVENTAIRE_V1 = Object.freeze([
+  'ID_Fichier', 'Nom', 'Type_MIME', 'Taille_Mo', 'Derniere_Activite', 'Proprietaire', 'URL', 'Statut', 'Date_Traitement'
+]);
 
 const COLONNES_LISTE_BLANCHE = Object.freeze({
   ID: 0,

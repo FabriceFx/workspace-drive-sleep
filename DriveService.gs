@@ -118,9 +118,10 @@ function formaterFormuleDossierParentDefaut_(fichier) {
  * et mise en cache mémoire pour limiter drastiquement les requêtes Drive API.
  * @param {Object} fichier Fichier retourné par Drive API.
  * @param {Map<string, string>} [cache] Cache idDossier -> formule HYPERLINK.
+ * @param {Object} [cacheDossiers] Cache de métadonnées partagé (construireCacheDossiers_).
  * @returns {string} Formule =HYPERLINK("...", "...").
  */
-function resoudreFormuleDossierParent_(fichier, cache) {
+function resoudreFormuleDossierParent_(fichier, cache, cacheDossiers) {
   if (!fichier || !Array.isArray(fichier.parents) || fichier.parents.length === 0) {
     return '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")';
   }
@@ -134,17 +135,10 @@ function resoudreFormuleDossierParent_(fichier, cache) {
 
   let nom = 'Dossier';
   let url = `https://drive.google.com/drive/folders/${idParent}`;
-  try {
-    const meta = executerAvecRetry_(() => Drive.Files.get(idParent, {
-      fields: 'name, webViewLink',
-      supportsAllDrives: true
-    }));
-    if (meta) {
-      if (meta.name) nom = String(meta.name).trim();
-      if (meta.webViewLink) url = String(meta.webViewLink).trim();
-    }
-  } catch (erreur) {
-    console.warn(`Impossible de récupérer les métadonnées du dossier parent ${idParent} :`, erreur.message);
+  const meta = (cacheDossiers || construireCacheDossiers_()).obtenir(idParent);
+  if (meta) {
+    if (meta.name) nom = String(meta.name).trim();
+    if (meta.webViewLink && /^https:\/\//i.test(meta.webViewLink)) url = String(meta.webViewLink).trim();
   }
 
   const nomEchappe = nom.replace(/"/g, () => '""');
@@ -158,69 +152,61 @@ function resoudreFormuleDossierParent_(fichier, cache) {
 }
 
 /**
+ * Cache unique des métadonnées de dossiers pour une exécution : un seul appel Drive par dossier
+ * (nom, lien, parents), partagé par la liste blanche et la colonne Dossier_Parent.
+ * @returns {{obtenir: function(string): ?Object, taille: function(): number}}
+ */
+function construireCacheDossiers_() {
+  const cache = new Map(); // idDossier -> métadonnées ou null si inaccessible
+  return {
+    obtenir(idDossier) {
+      if (!idDossier) return null;
+      if (cache.has(idDossier)) return cache.get(idDossier);
+      let meta = null;
+      try {
+        meta = executerAvecRetry_(() => Drive.Files.get(idDossier, {
+          fields: 'id, name, webViewLink, parents',
+          supportsAllDrives: true
+        }));
+      } catch (erreur) {
+        console.warn(`Métadonnées du dossier ${idDossier} inaccessibles :`, erreur.message);
+      }
+      cache.set(idDossier, meta);
+      return meta;
+    },
+    taille() {
+      return cache.size;
+    }
+  };
+}
+
+/**
  * Construit un vérificateur « ce fichier est-il sous un dossier de la liste blanche ? »
  * qui remonte toute l'arborescence (et pas seulement le parent direct), avec cache.
+ * Aucun appel Drive n'est fait si la liste blanche est vide.
  * @param {Set<string>} idsListeBlanche ID protégés (fichiers ou dossiers).
+ * @param {Object} [cacheDossiers] Cache de métadonnées partagé (construireCacheDossiers_).
  * @returns {function(Object): boolean} Vérificateur.
  */
-function construireVerificateurDossiersProteges_(idsListeBlanche) {
-  const cacheDossiers = new Map(); // idDossier -> boolean (protégé ou non)
+function construireVerificateurDossiersProteges_(idsListeBlanche, cacheDossiers) {
+  const metadonnees = cacheDossiers || construireCacheDossiers_();
+  const protection = new Map(); // idDossier -> boolean (protégé ou non)
 
   const estDossierProtege = (idDossier, profondeur) => {
     if (idsListeBlanche.has(idDossier)) return true;
-    if (cacheDossiers.has(idDossier)) return cacheDossiers.get(idDossier);
+    if (protection.has(idDossier)) return protection.get(idDossier);
     if (profondeur >= PROFONDEUR_MAX_ARBORESCENCE) return false;
-    cacheDossiers.set(idDossier, false); // garde-fou contre les cycles
-    let parents = [];
-    try {
-      const meta = executerAvecRetry_(() => Drive.Files.get(idDossier, { fields: 'parents', supportsAllDrives: true }));
-      parents = meta.parents || [];
-    } catch (erreur) {
-      console.warn(`Parents du dossier ${idDossier} inaccessibles :`, erreur.message);
-    }
+    protection.set(idDossier, false); // garde-fou contre les cycles
+    const meta = metadonnees.obtenir(idDossier);
+    const parents = (meta && meta.parents) || [];
     const resultat = parents.some((idParent) => estDossierProtege(idParent, profondeur + 1));
-    cacheDossiers.set(idDossier, resultat);
+    protection.set(idDossier, resultat);
     return resultat;
   };
 
   return (fichier) => {
     if (idsListeBlanche.size === 0 || !Array.isArray(fichier.parents)) return false;
     return fichier.parents.some((idParent) => estDossierProtege(idParent, 0));
-  };
-}
-
-/**
- * Construit un vérificateur « ce fichier est-il sous un dossier placé à la corbeille ? »
- * qui remonte toute l'arborescence parente avec un cache mémoire.
- * @returns {function(Object): boolean}
- */
-function construireVerificateurDossiersCorbeille_() {
-  const cacheCorbeille = new Map(); // idDossier -> boolean (dans la corbeille ou non)
-
-  const estDossierCorbeille = (idDossier, profondeur) => {
-    if (cacheCorbeille.has(idDossier)) return cacheCorbeille.get(idDossier);
-    if (profondeur >= PROFONDEUR_MAX_ARBORESCENCE) return false;
-    cacheCorbeille.set(idDossier, false); // garde-fou contre les cycles
-    let estCorbeille = false;
-    let parents = [];
-    try {
-      const meta = executerAvecRetry_(() => Drive.Files.get(idDossier, { fields: 'trashed, parents', supportsAllDrives: true }));
-      if (meta && meta.trashed === true) {
-        estCorbeille = true;
-      } else {
-        parents = (meta && meta.parents) || [];
-      }
-    } catch (erreur) {
-      console.warn(`Statut du dossier ${idDossier} inaccessible :`, erreur.message);
-    }
-    const resultat = estCorbeille || parents.some((idParent) => estDossierCorbeille(idParent, profondeur + 1));
-    cacheCorbeille.set(idDossier, resultat);
-    return resultat;
-  };
-
-  return (fichier) => {
-    if (!fichier || !Array.isArray(fichier.parents) || fichier.parents.length === 0) return false;
-    return fichier.parents.some((idParent) => estDossierCorbeille(idParent, 0));
   };
 }
 
@@ -305,13 +291,13 @@ function executerCycleAudit_() {
 
   const idsListeBlanche = chargerIdsListeBlanche_();
   const idsExclus = new Set([...idsListeBlanche, ...chargerIdsInventaireExistants_()]);
-  const estSousDossierProtege = construireVerificateurDossiersProteges_(idsListeBlanche);
-  const estDansDossierCorbeille = construireVerificateurDossiersCorbeille_();
-  const cacheDossiersParent = new Map();
+  const cacheDossiers = construireCacheDossiers_();
+  const estSousDossierProtege = construireVerificateurDossiersProteges_(idsListeBlanche, cacheDossiers);
+  const cacheFormulesParent = new Map();
+  // Pas de résolveur ici : le dossier parent n'est résolu (appel Drive) que pour les fichiers retenus.
   const contexte = {
     fuseau: obtenirFuseau_(),
-    emailParDefaut: (Session.getEffectiveUser().getEmail() || '').toLowerCase(),
-    resoudreDossierParent: (f) => resoudreFormuleDossierParent_(f, cacheDossiersParent)
+    emailParDefaut: (Session.getEffectiveUser().getEmail() || '').toLowerCase()
   };
 
   let jetonPage = props.getProperty(CLES_PROPRIETES.JETON_PAGE_DRIVE) || null;
@@ -325,8 +311,10 @@ function executerCycleAudit_() {
 
   let fichiersScannes = 0;
   const lignesAInserer = [];
+  let pageAbandonnee = false;
 
   do {
+    const jetonPageCourante = jetonPage; // permet de rejouer la page si elle doit être abandonnée
     const parametresRequete = {
       q: requeteDrive,
       pageSize: config.TAILLE_PAGE_DRIVE,
@@ -352,16 +340,24 @@ function executerCycleAudit_() {
     }
 
     const fichiers = reponse.files || [];
-    fichiersScannes += fichiers.length;
+    const lignesPage = [];
+    const idsPage = [];
 
-    fichiers.forEach((fichier) => {
-      if (estFichierGarde_(fichier)) return; // gardé par son propriétaire depuis la console
+    for (const fichier of fichiers) {
+      // Garde-fou intra-page : au-delà du seuil, la page est abandonnée et sera rejouée à la reprise.
+      if ((Date.now() - horodatageDebut) > CONFIGURATION_PAR_DEFAUT.DUREE_LIMITE_PAGE_MS) {
+        pageAbandonnee = true;
+        break;
+      }
+      if (estFichierGarde_(fichier)) continue; // gardé par son propriétaire depuis la console
       const candidat = evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, contexte);
-      if (!candidat || estSousDossierProtege(fichier) || estDansDossierCorbeille(fichier)) return;
+      if (!candidat || estSousDossierProtege(fichier)) continue;
+      candidat.dossierParent = resoudreFormuleDossierParent_(fichier, cacheFormulesParent, cacheDossiers);
       idsExclus.add(candidat.id);
+      idsPage.push(candidat.id);
       const nouvelleLigne = [];
       nouvelleLigne[COLONNES_INVENTAIRE.ID] = candidat.id;
-      nouvelleLigne[COLONNES_INVENTAIRE.NOM] = candidat.nom;
+      nouvelleLigne[COLONNES_INVENTAIRE.NOM] = protegerTexteCellule_(candidat.nom);
       nouvelleLigne[COLONNES_INVENTAIRE.MIME_TYPE] = candidat.mimeType;
       nouvelleLigne[COLONNES_INVENTAIRE.TAILLE_MO] = candidat.tailleMo;
       nouvelleLigne[COLONNES_INVENTAIRE.DERNIERE_ACTIVITE] = candidat.derniereActiviteDate;
@@ -370,21 +366,34 @@ function executerCycleAudit_() {
       nouvelleLigne[COLONNES_INVENTAIRE.URL] = candidat.url;
       nouvelleLigne[COLONNES_INVENTAIRE.STATUT] = STATUTS_FICHIER.DORMANT;
       nouvelleLigne[COLONNES_INVENTAIRE.DATE_TRAITEMENT] = '';
-      lignesAInserer.push(nouvelleLigne);
-    });
+      lignesPage.push(nouvelleLigne);
+    }
 
+    if (pageAbandonnee) {
+      idsPage.forEach((id) => idsExclus.delete(id));
+      jetonPage = jetonPageCourante;
+      console.warn(`Page abandonnée par sécurité (temps écoulé) : elle sera rejouée. Dossiers en cache : ${cacheDossiers.taille()}.`);
+      break;
+    }
+    fichiersScannes += fichiers.length;
+    lignesAInserer.push(...lignesPage);
     jetonPage = reponse.nextPageToken || null;
   } while (jetonPage && (Date.now() - horodatageDebut) < config.DUREE_MAX_EXECUTION_MS);
 
   // Écriture avant sauvegarde du jeton : si l'écriture échoue, la page sera rejouée (pas de perte).
   enregistrerLotInventaire_(lignesAInserer);
 
-  if (jetonPage) {
+  if (jetonPage || pageAbandonnee) {
+    // Page abandonnée dès la première page de la campagne : jeton nul, la reprise repart du début.
     props.setProperties({
-      [CLES_PROPRIETES.JETON_PAGE_DRIVE]: jetonPage,
       [CLES_PROPRIETES.DATE_LIMITE_AUDIT]: dateLimiteIso,
       [CLES_PROPRIETES.STATUT_CAMPAGNE]: 'EN_COURS'
     });
+    if (jetonPage) {
+      props.setProperty(CLES_PROPRIETES.JETON_PAGE_DRIVE, jetonPage);
+    } else {
+      props.deleteProperty(CLES_PROPRIETES.JETON_PAGE_DRIVE);
+    }
     planifierRepriseAudit_();
     console.info(`Pause préventive avant timeout. ${lignesAInserer.length} fichiers ajoutés. Reprise planifiée.`);
     return { fichiersScannes, fichiersRetenus: lignesAInserer.length, reprisePlanifiee: true };

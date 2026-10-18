@@ -48,8 +48,7 @@ function analyserMonDrive(parametres) {
   const debut = Date.now();
   const config = lireConfiguration();
   const idsProteges = chargerIdsListeBlanche_();
-  const estSousDossierProtege = construireVerificateurDossiersProteges_(idsProteges);
-  const estDansDossierCorbeille = construireVerificateurDossiersCorbeille_();
+  const estSousDossierProtege = construireVerificateurDossiersProteges_(idsProteges, construireCacheDossiers_());
   const contexte = {
     fuseau: obtenirFuseau_(),
     emailParDefaut: (Session.getEffectiveUser().getEmail() || '').toLowerCase()
@@ -82,7 +81,7 @@ function analyserMonDrive(parametres) {
       scannes++;
       if (estFichierGarde_(fichier)) return;
       const candidat = evaluerEligibiliteFichier_(fichier, config, dateLimite, idsProteges, contexte);
-      if (!candidat || estSousDossierProtege(fichier) || estDansDossierCorbeille(fichier)) return;
+      if (!candidat || estSousDossierProtege(fichier)) return;
       fichiers.push({
         id: candidat.id,
         nom: candidat.nom,
@@ -105,14 +104,16 @@ function analyserMonDrive(parametres) {
  * @returns {{idsTraites: string[], idsEchecs: string[], moLiberes: number}}
  */
 function mettreCorbeilleMesFichiers(ids) {
-  const resultat = appliquerSurMesFichiers_(ids, { trashed: false }, (id) => {
+  const resultat = appliquerSurMesFichiers_(ids, { trashed: false, accepterDejaFait: true }, (id) => {
     Drive.Files.update({ trashed: true }, id, null, { supportsAllDrives: true });
   });
   enregistrerEffetsLibreService_(resultat, STATUTS_FICHIER.CORBEILLE, [STATUTS_FICHIER.DORMANT, STATUTS_FICHIER.NOTIFIE], {
     nbCorbeille: 1,
     moCorbeille: 'taille'
   });
-  return { idsTraites: resultat.idsTraites, idsEchecs: resultat.idsEchecs, moLiberes: resultat.moTotal };
+  // Pour l'interface, un fichier déjà à la corbeille est « traité » (il sort de la liste) ;
+  // il n'entre pas dans le volume libéré ni dans les compteurs.
+  return { idsTraites: [...resultat.idsTraites, ...resultat.idsDejaFaits], idsEchecs: resultat.idsEchecs, moLiberes: resultat.moTotal };
 }
 
 /**
@@ -121,7 +122,7 @@ function mettreCorbeilleMesFichiers(ids) {
  * @returns {{idsTraites: string[], idsEchecs: string[], moLiberes: number}}
  */
 function annulerCorbeilleMesFichiers(ids) {
-  const resultat = appliquerSurMesFichiers_(ids, { trashed: true }, (id) => {
+  const resultat = appliquerSurMesFichiers_(ids, { trashed: true, accepterDejaFait: true }, (id) => {
     Drive.Files.update({ trashed: false }, id, null, { supportsAllDrives: true });
   });
   enregistrerEffetsLibreService_(resultat, STATUTS_FICHIER.DORMANT, [STATUTS_FICHIER.CORBEILLE], {
@@ -129,7 +130,7 @@ function annulerCorbeilleMesFichiers(ids) {
     moCorbeille: '-taille',
     nbRestaures: 1
   });
-  return { idsTraites: resultat.idsTraites, idsEchecs: resultat.idsEchecs, moLiberes: -resultat.moTotal };
+  return { idsTraites: [...resultat.idsTraites, ...resultat.idsDejaFaits], idsEchecs: resultat.idsEchecs, moLiberes: -resultat.moTotal };
 }
 
 /**
@@ -140,7 +141,8 @@ function annulerCorbeilleMesFichiers(ids) {
  * @returns {{idsTraites: string[], idsEchecs: string[]}}
  */
 function conserverMesFichiers(ids) {
-  const resultat = appliquerSurMesFichiers_(ids, { trashed: false }, (id) => {
+  // Un fichier à la corbeille ne peut pas être « gardé » : il est renvoyé en échec.
+  const resultat = appliquerSurMesFichiers_(ids, { trashed: false, accepterDejaFait: false }, (id) => {
     Drive.Files.update({ properties: { [CLE_APP_PROPERTY_CONSERVER]: '1' } }, id, null, { supportsAllDrives: true });
   });
   enregistrerEffetsLibreService_(resultat, STATUTS_FICHIER.LISTE_BLANCHE, [STATUTS_FICHIER.DORMANT, STATUTS_FICHIER.NOTIFIE], {
@@ -167,12 +169,14 @@ function estFichierGarde_(fichier) {
 /**
  * Applique une opération Drive aux seuls fichiers dont l'utilisateur est propriétaire,
  * sous budget de temps. La propriété est revérifiée auprès de Drive (jamais sur la foi de la page).
+ * Un fichier déjà dans l'état cible n'est pas retouché : il est classé « déjà fait » si
+ * `accepterDejaFait` est vrai (opération idempotente), sinon en échec.
  * @param {string[]} ids ID demandés.
- * @param {{trashed: boolean}} etatAttendu État de corbeille attendu avant l'opération.
+ * @param {{trashed: boolean, accepterDejaFait: boolean}} regles État de corbeille attendu avant l'opération.
  * @param {function(string): void} operation Opération Drive à appliquer.
- * @returns {{idsTraites: string[], idsEchecs: string[], taillesMo: Map<string, number>, moTotal: number}}
+ * @returns {{idsTraites: string[], idsDejaFaits: string[], idsEchecs: string[], taillesMo: Map<string, number>, moTotal: number}}
  */
-function appliquerSurMesFichiers_(ids, etatAttendu, operation) {
+function appliquerSurMesFichiers_(ids, regles, operation) {
   if (!Array.isArray(ids) || ids.length === 0) {
     throw new Error('Aucun fichier sélectionné.');
   }
@@ -182,8 +186,9 @@ function appliquerSurMesFichiers_(ids, etatAttendu, operation) {
   }
   const debut = Date.now();
   const idsTraites = [];
+  const idsDejaFaits = [];
   const idsEchecs = [];
-  const taillesMo = new Map();
+  const taillesMo = new Map(); // uniquement les fichiers réellement traités par cet appel
 
   [...new Set(ids.map((id) => String(id).trim()).filter(Boolean))].forEach((id) => {
     if ((Date.now() - debut) > config.DUREE_MAX_DECISIONS_MS) {
@@ -199,10 +204,12 @@ function appliquerSurMesFichiers_(ids, etatAttendu, operation) {
         idsEchecs.push(id);
         return;
       }
-      const dejaEnEtat = Boolean(meta.trashed) !== etatAttendu.trashed;
-      if (!dejaEnEtat) {
-        executerAvecRetry_(() => operation(id));
+      const dejaDansEtatCible = Boolean(meta.trashed) !== regles.trashed;
+      if (dejaDansEtatCible) {
+        (regles.accepterDejaFait ? idsDejaFaits : idsEchecs).push(id);
+        return;
       }
+      executerAvecRetry_(() => operation(id));
       const octets = Number(meta.quotaBytesUsed !== undefined ? meta.quotaBytesUsed : meta.size) || 0;
       taillesMo.set(id, octets / (1024 * 1024));
       idsTraites.push(id);
@@ -213,7 +220,7 @@ function appliquerSurMesFichiers_(ids, etatAttendu, operation) {
   });
 
   const moTotal = Number([...taillesMo.values()].reduce((a, b) => a + b, 0).toFixed(2));
-  return { idsTraites, idsEchecs, taillesMo, moTotal };
+  return { idsTraites, idsDejaFaits, idsEchecs, taillesMo, moTotal };
 }
 
 /**
@@ -225,7 +232,8 @@ function appliquerSurMesFichiers_(ids, etatAttendu, operation) {
  * @param {Object} deltasParFichier Deltas par fichier ('taille' / '-taille' = taille du fichier en Mo).
  */
 function enregistrerEffetsLibreService_(resultat, nouveauStatut, statutsModifiables, deltasParFichier) {
-  if (resultat.idsTraites.length === 0) return;
+  const idsASynchroniser = [...resultat.idsTraites, ...(resultat.idsDejaFaits || [])];
+  if (idsASynchroniser.length === 0) return;
   const verrou = LockService.getScriptLock();
   if (!verrou.tryLock(20000)) {
     console.warn('Compteurs de la console non mis à jour (verrou indisponible).');
@@ -236,7 +244,7 @@ function enregistrerEffetsLibreService_(resultat, nouveauStatut, statutsModifiab
     if (estAdministrateur_()) {
       try {
         const maintenant = new Date();
-        const majParId = new Map(resultat.idsTraites.map((id) => [id, { statut: nouveauStatut, date: maintenant }]));
+        const majParId = new Map(idsASynchroniser.map((id) => [id, { statut: nouveauStatut, date: maintenant }]));
         idsInventaire = appliquerStatutsParId_(majParId, statutsModifiables);
         if (idsInventaire.size > 0) mettreAJourTableauDeBord();
       } catch (erreur) {

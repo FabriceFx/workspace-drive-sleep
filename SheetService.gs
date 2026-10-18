@@ -84,42 +84,76 @@ function initialiserFeuilleConfiguration_(classeur) {
 }
 
 /**
- * Initialise la feuille Inventaire_Dormant (dates stockées en vraies dates, formatées JJ/MM/AAAA).
+ * Initialise la feuille Inventaire_Dormant, ou migre automatiquement l'ancien format à 9 colonnes
+ * (insertion de Dossier_Parent en colonne G). Un format non reconnu n'est jamais modifié :
+ * l'erreur levée par verifierSchemaInventaire_ indique alors quoi faire.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} classeur
  */
 function initialiserFeuilleInventaire_(classeur) {
   let feuille = classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE);
-  const enTetes = [[
-    'ID_Fichier',
-    'Nom',
-    'Type_MIME',
-    'Taille_Mo',
-    'Derniere_Activite',
-    'Proprietaire',
-    'Dossier_Parent',
-    'URL',
-    'Statut',
-    'Date_Traitement'
-  ]];
-  if (!feuille) {
-    feuille = classeur.insertSheet(NOMS_FEUILLES.INVENTAIRE);
-    feuille.getRange(1, 1, 1, enTetes[0].length).setValues(enTetes).setFontWeight('bold').setBackground('#fce8e6');
-    feuille.getRange('E:E').setNumberFormat('dd/MM/yyyy');
-    feuille.getRange('J:J').setNumberFormat('dd/MM/yyyy');
+  const nbColonnes = ENTETES_INVENTAIRE.length;
+  const colonneDateTraitement = COLONNES_INVENTAIRE.DATE_TRAITEMENT + 1;
+
+  if (!feuille || feuille.getLastRow() === 0) {
+    feuille = feuille || classeur.insertSheet(NOMS_FEUILLES.INVENTAIRE);
+    feuille.getRange(1, 1, 1, nbColonnes).setValues([ENTETES_INVENTAIRE.slice()]).setFontWeight('bold').setBackground('#fce8e6');
+    feuille.getRange(1, COLONNES_INVENTAIRE.DERNIERE_ACTIVITE + 1, feuille.getMaxRows(), 1).setNumberFormat('dd/MM/yyyy');
+    feuille.getRange(1, colonneDateTraitement, feuille.getMaxRows(), 1).setNumberFormat('dd/MM/yyyy');
     feuille.setFrozenRows(1);
+    schemaInventaireVerifie_ = true;
     return;
   }
-  // Migration automatique si la colonne Dossier_Parent est absente de la feuille existante
-  const colDossier = Object.keys(COLONNES_INVENTAIRE).length;
-  if (feuille.getLastColumn() < colDossier) {
-    const enTetesActuels = feuille.getRange(1, 1, 1, Math.max(feuille.getLastColumn(), 1)).getValues()[0].map(String);
-    if (!enTetesActuels.some((h) => /dossier/i.test(h))) {
-      feuille.insertColumnAfter(COLONNES_INVENTAIRE.PROPRIETAIRE + 1);
-      feuille.getRange(1, COLONNES_INVENTAIRE.DOSSIER_PARENT + 1).setValue('Dossier_Parent').setFontWeight('bold').setBackground('#fce8e6');
-      feuille.getRange('J:J').setNumberFormat('dd/MM/yyyy');
-      console.info('Colonne Dossier_Parent insérée dans Inventaire_Dormant existant.');
-    }
+
+  const largeur = Math.max(feuille.getLastColumn(), ENTETES_INVENTAIRE_V1.length);
+  const enTetes = feuille.getRange(1, 1, 1, largeur).getValues()[0].map((h) => String(h ?? '').trim());
+  const estAncienFormat = ENTETES_INVENTAIRE_V1.every((nom, index) => enTetes[index] === nom);
+  if (estAncienFormat) {
+    feuille.insertColumnAfter(COLONNES_INVENTAIRE.PROPRIETAIRE + 1);
+    feuille.getRange(1, COLONNES_INVENTAIRE.DOSSIER_PARENT + 1)
+      .setValue(ENTETES_INVENTAIRE[COLONNES_INVENTAIRE.DOSSIER_PARENT])
+      .setFontWeight('bold')
+      .setBackground('#fce8e6');
+    feuille.getRange(1, colonneDateTraitement, feuille.getMaxRows(), 1).setNumberFormat('dd/MM/yyyy');
+    SpreadsheetApp.flush();
+    console.info('Inventaire_Dormant migré au format v1.3.1 (colonne Dossier_Parent insérée en G).');
   }
+  schemaInventaireVerifie_ = false;
+  verifierSchemaInventaire_(feuille);
+}
+
+/** Mémorise, pour l'exécution en cours, que le format de l'inventaire a été contrôlé. */
+let schemaInventaireVerifie_ = false;
+
+/**
+ * Vérifie que l'onglet Inventaire_Dormant a le format attendu avant toute lecture ou écriture.
+ * Sans ce contrôle, un onglet non migré ferait lire les statuts dans la mauvaise colonne.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} feuille Onglet Inventaire_Dormant.
+ * @throws {Error} Si les colonnes clés ne sont pas à leur place.
+ */
+function verifierSchemaInventaire_(feuille) {
+  if (schemaInventaireVerifie_ || !feuille || feuille.getLastRow() === 0) return;
+  const largeur = Math.max(feuille.getLastColumn(), ENTETES_INVENTAIRE.length);
+  const enTetes = feuille.getRange(1, 1, 1, largeur).getValues()[0].map((h) => String(h ?? '').trim());
+  const colonnesCles = ['ID', 'DOSSIER_PARENT', 'URL', 'STATUT', 'DATE_TRAITEMENT'];
+  const anomalies = colonnesCles.filter((cle) => enTetes[COLONNES_INVENTAIRE[cle]] !== ENTETES_INVENTAIRE[COLONNES_INVENTAIRE[cle]]);
+  if (anomalies.length > 0) {
+    throw new Error(
+      `L'onglet ${NOMS_FEUILLES.INVENTAIRE} n'a pas le format attendu (colonnes : ${anomalies.join(', ')}). ` +
+      `Lancez le menu « 1. Initialiser » pour le migrer, ou rétablissez les en-têtes : ${ENTETES_INVENTAIRE.join(' | ')}.`
+    );
+  }
+  schemaInventaireVerifie_ = true;
+}
+
+/**
+ * Neutralise une valeur texte qu'une cellule interpréterait comme formule ou nombre
+ * (nom de fichier commençant par =, +, - ou @) en la préfixant d'une apostrophe.
+ * @param {*} valeur Valeur à écrire.
+ * @returns {*} Valeur sûre pour setValues.
+ */
+function protegerTexteCellule_(valeur) {
+  if (typeof valeur !== 'string') return valeur;
+  return /^[=+\-@]/.test(valeur) ? `'${valeur}` : valeur;
 }
 
 /**
@@ -203,6 +237,7 @@ function lireLignesInventaire_() {
   if (!feuille || feuille.getLastRow() < 2) {
     return [];
   }
+  verifierSchemaInventaire_(feuille);
   const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
   return feuille.getRange(2, 1, feuille.getLastRow() - 1, nbColonnes).getValues();
 }
@@ -223,6 +258,7 @@ function enregistrerLotInventaire_(nouvellesLignes) {
   }
   try {
     const feuille = obtenirClasseurMaitre_().getSheetByName(NOMS_FEUILLES.INVENTAIRE);
+    verifierSchemaInventaire_(feuille);
     const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
     feuille.getRange(feuille.getLastRow() + 1, 1, nouvellesLignes.length, nbColonnes).setValues(nouvellesLignes);
     SpreadsheetApp.flush();
@@ -247,6 +283,7 @@ function appliquerStatutsParId_(majParId, statutsModifiables) {
   if (!feuille || feuille.getLastRow() < 2 || majParId.size === 0) {
     return idsMisAJour;
   }
+  verifierSchemaInventaire_(feuille);
   const nbLignes = feuille.getLastRow() - 1;
   const ids = feuille.getRange(2, COLONNES_INVENTAIRE.ID + 1, nbLignes, 1).getValues();
   const plageStatuts = feuille.getRange(2, COLONNES_INVENTAIRE.STATUT + 1, nbLignes, 2);
@@ -272,29 +309,21 @@ function appliquerStatutsParId_(majParId, statutsModifiables) {
 }
 
 /**
- * Synchronise l'inventaire avec l'état réel de Google Drive :
- * vérifie les fichiers actuellement au statut DORMANT ou NOTIFIE
- * et bascule automatiquement à CORBEILLE ceux qui ont été placés à la corbeille.
+ * Synchronise l'inventaire avec l'état réel de Google Drive : les fichiers DORMANT ou NOTIFIE
+ * placés à la corbeille en dehors de l'outil passent au statut CORBEILLE.
+ * Lecture de la corbeille hors verrou, écriture sous verrou de script.
+ * À appeler en début d'audit et d'envoi des bilans, jamais depuis un contexte qui détient déjà le verrou.
  * @returns {number} Nombre de lignes mises à jour vers CORBEILLE.
  */
 function synchroniserStatutsCorbeilleInventaire_() {
-  const classeur = obtenirClasseurMaitre_();
-  const feuilleInv = classeur.getSheetByName(NOMS_FEUILLES.INVENTAIRE);
-  if (!feuilleInv || feuilleInv.getLastRow() < 2) return 0;
-
-  const nbColonnes = Object.keys(COLONNES_INVENTAIRE).length;
-  const plage = feuilleInv.getRange(2, 1, feuilleInv.getLastRow() - 1, nbColonnes);
-  const lignes = plage.getValues();
   const idsActifs = new Set();
-
-  lignes.forEach((ligne) => {
+  lireLignesInventaire_().forEach((ligne) => {
     const id = String(ligne[COLONNES_INVENTAIRE.ID] ?? '').trim();
     const statut = String(ligne[COLONNES_INVENTAIRE.STATUT] ?? '').trim();
     if (id && (statut === STATUTS_FICHIER.DORMANT || statut === STATUTS_FICHIER.NOTIFIE)) {
       idsActifs.add(id);
     }
   });
-
   if (idsActifs.size === 0) return 0;
 
   const idsEnCorbeille = new Set();
@@ -311,23 +340,30 @@ function synchroniserStatutsCorbeilleInventaire_() {
       if (jeton) options.pageToken = jeton;
       const reponse = executerAvecRetry_(() => Drive.Files.list(options));
       (reponse.files || []).forEach((f) => {
-        if (idsActifs.has(f.id)) {
-          idsEnCorbeille.add(f.id);
-        }
+        if (idsActifs.has(f.id)) idsEnCorbeille.add(f.id);
       });
       jeton = reponse.nextPageToken || null;
     } while (jeton && idsEnCorbeille.size < idsActifs.size);
   } catch (erreur) {
     console.warn('Impossible de synchroniser les fichiers à la corbeille :', erreur.message);
+    return 0;
   }
-
   if (idsEnCorbeille.size === 0) return 0;
 
-  const maintenant = new Date();
-  const majParId = new Map([...idsEnCorbeille].map((id) => [id, { statut: STATUTS_FICHIER.CORBEILLE, date: maintenant }]));
-  const misAJour = appliquerStatutsParId_(majParId, [STATUTS_FICHIER.DORMANT, STATUTS_FICHIER.NOTIFIE]);
-  console.info(`Inventaire synchronisé : ${misAJour.size} fichier(s) mis à jour au statut CORBEILLE.`);
-  return misAJour.size;
+  const verrou = LockService.getScriptLock();
+  if (!verrou.tryLock(30000)) {
+    console.warn('Synchronisation de la corbeille reportée : inventaire verrouillé.');
+    return 0;
+  }
+  try {
+    const maintenant = new Date();
+    const majParId = new Map([...idsEnCorbeille].map((id) => [id, { statut: STATUTS_FICHIER.CORBEILLE, date: maintenant }]));
+    const misAJour = appliquerStatutsParId_(majParId, [STATUTS_FICHIER.DORMANT, STATUTS_FICHIER.NOTIFIE]);
+    console.info(`Inventaire synchronisé : ${misAJour.size} fichier(s) mis à jour au statut CORBEILLE.`);
+    return misAJour.size;
+  } finally {
+    verrou.releaseLock();
+  }
 }
 
 /**
@@ -337,7 +373,6 @@ function synchroniserStatutsCorbeilleInventaire_() {
  */
 function mettreAJourTableauDeBord() {
   exigerAdministrateur_();
-  synchroniserStatutsCorbeilleInventaire_();
   const classeur = obtenirClasseurMaitre_();
   const feuilleTdb = classeur.getSheetByName(NOMS_FEUILLES.TABLEAU_DE_BORD);
   const config = lireConfiguration();

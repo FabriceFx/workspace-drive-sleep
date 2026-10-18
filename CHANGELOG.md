@@ -18,6 +18,15 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - **Migration automatique non destructive** : Si un classeur existant possède déjà une feuille `Inventaire_Dormant` avec 9 colonnes, la colonne `Dossier_Parent` est automatiquement insérée à l'emplacement idoine sans altérer les données existantes.
 - **Suite de tests** : Ajout du test unitaire `test_CA10_formuleDossierParent` et renforcement de `test_CA05_constantesColonnes`.
 
+### Corrigé (revue du 18/10) / Fixed
+- **Limite des 6 minutes** : cache unique des métadonnées de dossiers (`construireCacheDossiers_`, un seul appel Drive par dossier au lieu de trois), dossier parent résolu uniquement pour les fichiers retenus, pages de 200 fichiers et garde-fou intra-page (`DUREE_LIMITE_PAGE_MS`) : une page trop longue est abandonnée puis rejouée à la reprise, sans perte ni doublon.
+- **Vérificateur des dossiers à la corbeille retiré** : redondant avec la requête `trashed = false` (Drive marque aussi `trashed` les fichiers d'un dossier mis à la corbeille) et coûteux en appels.
+- **Synchronisation de la corbeille** : écriture sous verrou de script ; retirée de `mettreAJourTableauDeBord` (qui n'interroge plus Drive à chaque action de la console).
+- **Migration de l'inventaire fiabilisée** : reconnaissance exacte de l'ancien format, et contrôle du format (`verifierSchemaInventaire_`) avant toute lecture ou écriture — un onglet non migré bloque avec un message explicite au lieu de lire les statuts dans la mauvaise colonne.
+- **Console** : un fichier déjà dans l'état visé est classé « déjà fait » (sorti de la liste, non compté dans les gains) ; « Garder » sur un fichier à la corbeille est refusé.
+- **Noms de fichiers interprétés comme formules** : un nom commençant par `=`, `+`, `-` ou `@` est neutralisé (`protegerTexteCellule_`).
+- Tests : 20 tests (ajout de `test_CA11_protectionNomCommeFormule` et `test_CA11_schemaInventaireControle`).
+
 ---
 
 ## [1.3.0] - 2026-10-18

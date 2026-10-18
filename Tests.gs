@@ -29,7 +29,9 @@ function runAllTests() {
     test_CA08_dateLimiteFinDeMois,
     test_CA08_fichierPartageSignale,
     test_CA09_fichierCorbeilleExclu,
-    test_CA10_formuleDossierParent
+    test_CA10_formuleDossierParent,
+    test_CA11_protectionNomCommeFormule,
+    test_CA11_schemaInventaireControle
   ];
 
   let reussis = 0;
@@ -242,4 +244,31 @@ function test_CA10_formuleDossierParent() {
   const cache = new Map([['folder_cached', '=HYPERLINK("https://drive.google.com/drive/folders/folder_cached", "CacheTest")']]);
   const depuisCache = resoudreFormuleDossierParent_({ parents: ['folder_cached'] }, cache);
   affirmer_(depuisCache === '=HYPERLINK("https://drive.google.com/drive/folders/folder_cached", "CacheTest")', 'Le cache mémoire doit être prioritaire');
+}
+
+function test_CA11_protectionNomCommeFormule() {
+  affirmer_(protegerTexteCellule_('=IMPORTXML("x","y")') === '\'=IMPORTXML("x","y")', 'Un nom commençant par = doit être neutralisé.');
+  affirmer_(protegerTexteCellule_('-2023 budget') === "'-2023 budget", 'Un nom commençant par - doit être neutralisé.');
+  affirmer_(protegerTexteCellule_('+33 contacts') === "'+33 contacts", 'Un nom commençant par + doit être neutralisé.');
+  affirmer_(protegerTexteCellule_('Rapport 2024.pdf') === 'Rapport 2024.pdf', 'Un nom ordinaire ne doit pas être modifié.');
+  affirmer_(protegerTexteCellule_(42) === 42, 'Une valeur non textuelle ne doit pas être modifiée.');
+}
+
+function test_CA11_schemaInventaireControle() {
+  const fausseFeuille = (enTetes) => ({
+    getLastRow: () => 2,
+    getLastColumn: () => enTetes.length,
+    getRange: () => ({ getValues: () => [enTetes] })
+  });
+  schemaInventaireVerifie_ = false;
+  verifierSchemaInventaire_(fausseFeuille(ENTETES_INVENTAIRE.slice()));
+  schemaInventaireVerifie_ = false;
+  let erreurLevee = false;
+  try {
+    verifierSchemaInventaire_(fausseFeuille(ENTETES_INVENTAIRE_V1.slice()));
+  } catch (erreur) {
+    erreurLevee = /format attendu/.test(erreur.message);
+  }
+  schemaInventaireVerifie_ = false;
+  affirmer_(erreurLevee, 'Un inventaire non migré doit bloquer la lecture avec un message explicite.');
 }
