@@ -23,7 +23,8 @@ const CONFIGURATION_PAR_DEFAUT = Object.freeze({
   FACTEUR_CO2_KG_PAR_GO_AN: 0.2,
   COUT_GO_ANNUEL_EUR: 0.25,
   INCLURE_FICHIERS_NATIFS: 'OUI',
-  POIDS_ESTIME_NATIF_MO: 2
+  POIDS_ESTIME_NATIF_MO: 2,
+  IGNORER_CONSULTATION: 'NON'
 });
 
 /**
@@ -37,7 +38,8 @@ const PARAMETRES_MODIFIABLES = Object.freeze({
   FACTEUR_CO2_KG_PAR_GO_AN: { type: 'nombre', min: 0 },
   COUT_GO_ANNUEL_EUR: { type: 'nombre', min: 0 },
   POIDS_ESTIME_NATIF_MO: { type: 'nombre', min: 0 },
-  INCLURE_FICHIERS_NATIFS: { type: 'choix', valeurs: ['OUI', 'NON'] }
+  INCLURE_FICHIERS_NATIFS: { type: 'choix', valeurs: ['OUI', 'NON'] },
+  IGNORER_CONSULTATION: { type: 'choix', valeurs: ['OUI', 'NON'] }
 });
 
 const NOMS_FEUILLES = Object.freeze({
@@ -294,7 +296,8 @@ function lireConfiguration(forcerRelecture = false) {
         const regle = PARAMETRES_MODIFIABLES[cleNettoyee];
         if (!regle || valeur === '' || valeur === null) return;
         if (regle.type === 'nombre') {
-          const nombre = Number(valeur);
+          const valeurStr = typeof valeur === 'string' ? valeur.replace(',', '.').trim() : valeur;
+          const nombre = Number(valeurStr);
           if (Number.isFinite(nombre) && nombre >= regle.min) {
             config[cleNettoyee] = nombre;
           } else {

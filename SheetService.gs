@@ -69,21 +69,37 @@ function supprimerFeuilleInitialeSiVierge_(classeur) {
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} classeur
  */
 function initialiserFeuilleConfiguration_(classeur) {
-  if (classeur.getSheetByName(NOMS_FEUILLES.CONFIGURATION)) return;
-  const feuille = classeur.insertSheet(NOMS_FEUILLES.CONFIGURATION);
-  const donnees = [
-    ['Paramètre / Parameter', 'Valeur / Value', 'Description (FR / EN)'],
-    ['SEUIL_INACTIVITE_MOIS', CONFIGURATION_PAR_DEFAUT.SEUIL_INACTIVITE_MOIS, 'Mois sans modification ni ouverture (min. 1) / Months of inactivity (min. 1)'],
-    ['TAILLE_MIN_MO', CONFIGURATION_PAR_DEFAUT.TAILLE_MIN_MO, 'Taille minimale (Mo) pour fichiers binaires / Min size (MB) for binary files'],
-    ['FACTEUR_CO2_KG_PAR_GO_AN', CONFIGURATION_PAR_DEFAUT.FACTEUR_CO2_KG_PAR_GO_AN, 'Empreinte carbone (kgCO2e / Go / an) / Carbon factor (kgCO2e / GB / year)'],
-    ['COUT_GO_ANNUEL_EUR', CONFIGURATION_PAR_DEFAUT.COUT_GO_ANNUEL_EUR, 'Coût financier estimé (€ / Go / an) / Storage cost (EUR / GB / year)'],
-    ['INCLURE_FICHIERS_NATIFS', CONFIGURATION_PAR_DEFAUT.INCLURE_FICHIERS_NATIFS, 'Inclure Docs/Sheets/Slides sur l\'ancienneté (OUI/NON) / Include native files (OUI/NON)'],
-    ['POIDS_ESTIME_NATIF_MO', CONFIGURATION_PAR_DEFAUT.POIDS_ESTIME_NATIF_MO, 'Poids de repli (Mo) si Drive ne renvoie pas quotaBytesUsed / Fallback weight (MB)']
-  ];
-  feuille.getRange(1, 1, donnees.length, 3).setValues(donnees);
-  feuille.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#e8f0fe');
-  feuille.setFrozenRows(1);
-  feuille.autoResizeColumns(1, 3);
+  let feuille = classeur.getSheetByName(NOMS_FEUILLES.CONFIGURATION);
+  if (!feuille) {
+    feuille = classeur.insertSheet(NOMS_FEUILLES.CONFIGURATION);
+    const donnees = [
+      ['Paramètre / Parameter', 'Valeur / Value', 'Description (FR / EN)'],
+      ['SEUIL_INACTIVITE_MOIS', CONFIGURATION_PAR_DEFAUT.SEUIL_INACTIVITE_MOIS, 'Mois sans modification ni ouverture (min. 1) / Months of inactivity (min. 1)'],
+      ['TAILLE_MIN_MO', CONFIGURATION_PAR_DEFAUT.TAILLE_MIN_MO, 'Taille minimale (Mo) pour fichiers binaires / Min size (MB) for binary files'],
+      ['FACTEUR_CO2_KG_PAR_GO_AN', CONFIGURATION_PAR_DEFAUT.FACTEUR_CO2_KG_PAR_GO_AN, 'Empreinte carbone (kgCO2e / Go / an) / Carbon factor (kgCO2e / GB / year)'],
+      ['COUT_GO_ANNUEL_EUR', CONFIGURATION_PAR_DEFAUT.COUT_GO_ANNUEL_EUR, 'Coût financier estimé (€ / Go / an) / Storage cost (EUR / GB / year)'],
+      ['INCLURE_FICHIERS_NATIFS', CONFIGURATION_PAR_DEFAUT.INCLURE_FICHIERS_NATIFS, 'Inclure Docs/Sheets/Slides sur l\'ancienneté (OUI/NON) / Include native files (OUI/NON)'],
+      ['POIDS_ESTIME_NATIF_MO', CONFIGURATION_PAR_DEFAUT.POIDS_ESTIME_NATIF_MO, 'Poids de repli (Mo) si Drive ne renvoie pas quotaBytesUsed / Fallback weight (MB)'],
+      ['IGNORER_CONSULTATION', CONFIGURATION_PAR_DEFAUT.IGNORER_CONSULTATION, 'Ne considérer que la date de modification (OUI/NON) / Ignore view date and use modification date only (OUI/NON)']
+    ];
+    feuille.getRange(1, 1, donnees.length, 3).setValues(donnees);
+    feuille.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#e8f0fe');
+    feuille.setFrozenRows(1);
+    feuille.autoResizeColumns(1, 3);
+    return;
+  }
+
+  // Compléter un onglet existant si le paramètre IGNORER_CONSULTATION n'y figure pas encore
+  if (feuille.getLastRow() >= 2) {
+    const cles = feuille.getRange(2, 1, feuille.getLastRow() - 1, 1).getValues().map(([c]) => String(c ?? '').trim());
+    if (!cles.includes('IGNORER_CONSULTATION')) {
+      feuille.appendRow([
+        'IGNORER_CONSULTATION',
+        CONFIGURATION_PAR_DEFAUT.IGNORER_CONSULTATION,
+        'Ne considérer que la date de modification (OUI/NON) / Ignore view date and use modification date only (OUI/NON)'
+      ]);
+    }
+  }
 }
 
 /**

@@ -16,7 +16,9 @@ function runAllTests() {
     test_CA02_filtrageFichierBinaireDormant,
     test_CA02_exclusionListeBlancheEtFichiersRecents,
     test_CA02_tailleReelleQuotaBytesUsed,
+    test_CA02_quotaZeroUtiliseTailleFichier,
     test_CA02_natifSansQuotaUtilisePoidsEstime,
+    test_CA02_ignorerConsultation,
     test_CA03_echappementHtmlSecurite,
     test_CA03_formatageDateMailFr,
     test_CA04_calculKpiTableauDeBord,
@@ -130,6 +132,22 @@ function test_CA02_natifSansQuotaUtilisePoidsEstime() {
   const resultat = evaluerEligibiliteFichier_(natif, config, dateLimite, new Set(), CONTEXTE_TEST_);
   affirmer_(resultat !== null && resultat.tailleMo === 2, 'Un natif sans quotaBytesUsed doit utiliser le poids estimé.');
   affirmer_(resultat.proprietaire === 'defaut@exemple.fr', 'Sans propriétaire renvoyé, l\'adresse par défaut du contexte doit être utilisée.');
+}
+
+function test_CA02_quotaZeroUtiliseTailleFichier() {
+  const config = { ...CONFIGURATION_PAR_DEFAUT, TAILLE_MIN_MO: 1 };
+  const dateLimite = new Date('2025-10-01T00:00:00Z');
+  const fichier = { id: 'id_photo', name: 'photo.jpg', mimeType: 'image/jpeg', size: String(4 * 1024 * 1024), quotaBytesUsed: '0', modifiedTime: '2022-01-01T00:00:00Z' };
+  const resultat = evaluerEligibiliteFichier_(fichier, config, dateLimite, new Set(), CONTEXTE_TEST_);
+  affirmer_(resultat !== null && resultat.tailleMo === 4, 'Un fichier avec quotaBytesUsed à 0 doit utiliser sa taille réelle (size).');
+}
+
+function test_CA02_ignorerConsultation() {
+  const config = { ...CONFIGURATION_PAR_DEFAUT, IGNORER_CONSULTATION: 'OUI' };
+  const dateLimite = new Date('2025-10-01T00:00:00Z');
+  const fichierConsulte = { id: 'id_vu', name: 'guide.pdf', mimeType: 'application/pdf', size: String(10 * 1024 * 1024), modifiedTime: '2022-01-01T00:00:00Z', viewedByMeTime: '2026-10-01T00:00:00Z' };
+  const resultat = evaluerEligibiliteFichier_(fichierConsulte, config, dateLimite, new Set(), CONTEXTE_TEST_);
+  affirmer_(resultat !== null, 'Avec IGNORER_CONSULTATION=OUI, la date de consultation récente ne doit pas éliminer le fichier si la date de modification est ancienne.');
 }
 
 function test_CA03_echappementHtmlSecurite() {

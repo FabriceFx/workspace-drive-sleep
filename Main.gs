@@ -53,9 +53,40 @@ function actionMenuAudit() {
 
     if (resultat.fichiersRetenus === 0 && !resultat.reprisePlanifiee) {
       const config = lireConfiguration();
-      const explication = resultat.fichiersScannes === 0
-        ? `L'audit n'a trouvé aucun fichier modifié avant la date limite (seuil actuel : ${config.SEUIL_INACTIVITE_MOIS} mois), ou aucun fichier ne vous appartient directement ('me' in owners).\n\n💡 Conseil : Vous pouvez réduire temporairement le paramètre « SEUIL_INACTIVITE_MOIS » (ex. 1 ou 3 mois) dans la feuille « Configuration » pour tester avec des fichiers plus récents.`
-        : `${resultat.fichiersScannes} fichier(s) ont été examinés, mais aucun ne remplit les critères de sommeil (soit consultés récemment, soit taille < ${config.TAILLE_MIN_MO} Mo, soit protégés en Liste_Blanche).\n\n💡 Conseil : Réduisez « SEUIL_INACTIVITE_MOIS » ou « TAILLE_MIN_MO » (ex. 0.1 Mo) dans la feuille « Configuration » puis relancez l'audit.`;
+      const diag = resultat.diagnostic || {};
+      const lignesDiag = [];
+      if (diag.dejaInventorieOuProtege) {
+        lignesDiag.push(`• Déjà présents dans Inventaire_Dormant (ou Liste Blanche) : ${diag.dejaInventorieOuProtege}`);
+      }
+      if (diag.sousDossierProtege || diag.parentExclu) {
+        lignesDiag.push(`• Protégés car situés dans un dossier de la Liste Blanche : ${(diag.sousDossierProtege || 0) + (diag.parentExclu || 0)}`);
+      }
+      if (diag.vueRecente) {
+        lignesDiag.push(`• Consultés récemment dans Drive (viewedByMeTime) : ${diag.vueRecente}`);
+      }
+      if (diag.activiteRecente) {
+        lignesDiag.push(`• Modifiés après la date limite (${config.SEUIL_INACTIVITE_MOIS} mois) : ${diag.activiteRecente}`);
+      }
+      if (diag.tailleTropPetite) {
+        lignesDiag.push(`• Poids inférieur au seuil (${config.TAILLE_MIN_MO} Mo) : ${diag.tailleTropPetite}`);
+      }
+      if (diag.marquesGarder) {
+        lignesDiag.push(`• Déjà marqués « Garder » via la console : ${diag.marquesGarder}`);
+      }
+      if (diag.natifNonInclus) {
+        lignesDiag.push(`• Documents natifs Google exclus par configuration : ${diag.natifNonInclus}`);
+      }
+
+      let explication = '';
+      if (resultat.fichiersScannes === 0) {
+        explication = `L'audit n'a trouvé aucun fichier modifié avant la date limite (seuil actuel : ${config.SEUIL_INACTIVITE_MOIS} mois), ou aucun fichier ne vous appartient directement ('me' in owners).\n\n💡 Conseil : Vous pouvez réduire temporairement le paramètre « SEUIL_INACTIVITE_MOIS » (ex. 1 ou 3 mois) dans la feuille « Configuration » pour tester avec des fichiers plus récents.`;
+      } else {
+        const detail = lignesDiag.length > 0 ? `\n\nDétail des filtres :\n${lignesDiag.join('\n')}` : '';
+        const astuce = diag.vueRecente > 0
+          ? `\n\n💡 Astuce : ${diag.vueRecente} fichier(s) ont été écartés car leur date d'ouverture/consultation dans Drive est récente. Pour vous baser uniquement sur la date de modification, réglez « IGNORER_CONSULTATION » sur « OUI » dans la feuille « Configuration » puis relancez l'audit.`
+          : `\n\n💡 Conseil : Réduisez « SEUIL_INACTIVITE_MOIS » ou « TAILLE_MIN_MO » (ex. 0.1 Mo) dans la feuille « Configuration » puis relancez l'audit.`;
+        explication = `${resultat.fichiersScannes} fichier(s) ont été examinés, mais aucun nouveau fichier dormant n'a été retenu.${detail}${astuce}`;
+      }
       SpreadsheetApp.getUi().alert('🌱 Résultat de l\'audit Drive', explication, SpreadsheetApp.getUi().ButtonSet.OK);
     }
   } catch (erreur) {

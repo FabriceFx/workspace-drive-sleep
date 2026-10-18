@@ -23,46 +23,65 @@ const PROFONDEUR_MAX_ARBORESCENCE = 25;
  * @param {Date} dateLimite Date en deçà de laquelle un fichier est considéré inactif.
  * @param {Set<string>} idsExclus ID en liste blanche ou déjà inventoriés.
  * @param {Object} [contexte] { fuseau: string, emailParDefaut: string }
+ * @param {Object} [diagnostic] Objet accumulateur des motifs de rejet.
  * @returns {Object|null} Informations normalisées du fichier dormant ou null s'il est ignoré.
  */
-function evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, contexte) {
-  if (!fichier || !fichier.id || idsExclus.has(fichier.id)) {
+function evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, contexte, diagnostic) {
+  if (!fichier || !fichier.id) {
+    return null;
+  }
+  if (idsExclus.has(fichier.id)) {
+    if (diagnostic) diagnostic.dejaInventorieOuProtege = (diagnostic.dejaInventorieOuProtege || 0) + 1;
     return null;
   }
   if (fichier.trashed === true || fichier.explicitlyTrashed === true) {
+    if (diagnostic) diagnostic.corbeille = (diagnostic.corbeille || 0) + 1;
     return null;
   }
   if (fichier.mimeType === TYPE_MIME_DOSSIER) {
+    if (diagnostic) diagnostic.dossier = (diagnostic.dossier || 0) + 1;
     return null;
   }
   if (Array.isArray(fichier.parents) && fichier.parents.some((idParent) => idsExclus.has(idParent))) {
+    if (diagnostic) diagnostic.parentExclu = (diagnostic.parentExclu || 0) + 1;
     return null;
   }
 
   const dateModif = fichier.modifiedTime ? new Date(fichier.modifiedTime) : null;
-  const dateVue = fichier.viewedByMeTime ? new Date(fichier.viewedByMeTime) : null;
+  const ignorerConsultation = config && config.IGNORER_CONSULTATION === 'OUI';
+  const dateVue = (!ignorerConsultation && fichier.viewedByMeTime) ? new Date(fichier.viewedByMeTime) : null;
   const derniereActivite = (dateVue && dateModif)
     ? (dateVue > dateModif ? dateVue : dateModif)
     : (dateModif || dateVue);
 
   if (!derniereActivite || derniereActivite > dateLimite) {
+    if (diagnostic) {
+      if (dateVue && dateVue > dateLimite && dateModif && dateModif <= dateLimite) {
+        diagnostic.vueRecente = (diagnostic.vueRecente || 0) + 1;
+      } else {
+        diagnostic.activiteRecente = (diagnostic.activiteRecente || 0) + 1;
+      }
+    }
     return null;
   }
 
   const estNatifGoogle = TYPES_MIME_NATIFS_GOOGLE.includes(fichier.mimeType);
   if (estNatifGoogle && config.INCLURE_FICHIERS_NATIFS !== 'OUI') {
+    if (diagnostic) diagnostic.natifNonInclus = (diagnostic.natifNonInclus || 0) + 1;
     return null;
   }
 
-  // quotaBytesUsed = espace réellement décompté (révisions comprises, natifs inclus) ; size en repli.
-  const aQuota = fichier.quotaBytesUsed !== undefined && fichier.quotaBytesUsed !== null;
-  const octets = Number(aQuota ? fichier.quotaBytesUsed : fichier.size) || 0;
+  // quotaBytesUsed = espace décompté (si > 0) ; size en repli si quotaBytesUsed vaut 0 (fichiers exemptés de quota).
+  const octetsQuota = Number(fichier.quotaBytesUsed);
+  const octetsTaille = Number(fichier.size) || 0;
+  const octets = (Number.isFinite(octetsQuota) && octetsQuota > 0) ? octetsQuota : octetsTaille;
   let tailleMo = Number((octets / (1024 * 1024)).toFixed(2));
   if (estNatifGoogle) {
-    if (!aQuota) {
+    if (tailleMo === 0) {
       tailleMo = Number(config.POIDS_ESTIME_NATIF_MO) || 0;
     }
   } else if (tailleMo < config.TAILLE_MIN_MO) {
+    if (diagnostic) diagnostic.tailleTropPetite = (diagnostic.tailleTropPetite || 0) + 1;
     return null;
   }
 
@@ -330,6 +349,19 @@ function executerCycleAudit_() {
   let fichiersScannes = 0;
   const lignesAInserer = [];
   let pageAbandonnee = false;
+  const diagnostic = {
+    scannes: 0,
+    dejaInventorieOuProtege: 0,
+    corbeille: 0,
+    dossier: 0,
+    parentExclu: 0,
+    sousDossierProtege: 0,
+    vueRecente: 0,
+    activiteRecente: 0,
+    natifNonInclus: 0,
+    tailleTropPetite: 0,
+    marquesGarder: 0
+  };
 
   do {
     const jetonPageCourante = jetonPage; // permet de rejouer la page si elle doit être abandonnée
@@ -367,9 +399,16 @@ function executerCycleAudit_() {
         pageAbandonnee = true;
         break;
       }
-      if (estFichierGarde_(fichier)) continue; // gardé par son propriétaire depuis la console
-      const candidat = evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, contexte);
-      if (!candidat || estSousDossierProtege(fichier)) continue;
+      if (estFichierGarde_(fichier)) {
+        diagnostic.marquesGarder = (diagnostic.marquesGarder || 0) + 1;
+        continue; // gardé par son propriétaire depuis la console
+      }
+      const candidat = evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, contexte, diagnostic);
+      if (!candidat) continue;
+      if (estSousDossierProtege(fichier)) {
+        diagnostic.sousDossierProtege = (diagnostic.sousDossierProtege || 0) + 1;
+        continue;
+      }
       candidat.dossierParent = resoudreFormuleDossierParent_(fichier, cacheFormulesParent, cacheDossiers);
       idsExclus.add(candidat.id);
       idsPage.push(candidat.id);
@@ -394,6 +433,7 @@ function executerCycleAudit_() {
       break;
     }
     fichiersScannes += fichiers.length;
+    diagnostic.scannes = fichiersScannes;
     lignesAInserer.push(...lignesPage);
     jetonPage = reponse.nextPageToken || null;
   } while (jetonPage && (Date.now() - horodatageDebut) < config.DUREE_MAX_EXECUTION_MS);
@@ -414,7 +454,7 @@ function executerCycleAudit_() {
     }
     planifierRepriseAudit_();
     console.info(`Pause préventive avant timeout. ${lignesAInserer.length} fichiers ajoutés. Reprise planifiée.`);
-    return { fichiersScannes, fichiersRetenus: lignesAInserer.length, reprisePlanifiee: true };
+    return { fichiersScannes, fichiersRetenus: lignesAInserer.length, reprisePlanifiee: true, diagnostic };
   }
 
   props.deleteProperty(CLES_PROPRIETES.JETON_PAGE_DRIVE);
@@ -431,7 +471,7 @@ function executerCycleAudit_() {
   }
 
   console.info(`Audit terminé. Scannés : ${fichiersScannes}, Retenus : ${lignesAInserer.length}`);
-  return { fichiersScannes, fichiersRetenus: lignesAInserer.length, reprisePlanifiee: false };
+  return { fichiersScannes, fichiersRetenus: lignesAInserer.length, reprisePlanifiee: false, diagnostic };
 }
 
 /**

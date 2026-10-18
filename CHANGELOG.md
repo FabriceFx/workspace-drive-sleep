@@ -19,16 +19,19 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - **Suite de tests** : Ajout du test unitaire `test_CA10_formuleDossierParent` et renforcement de `test_CA05_constantesColonnes`.
 
 ### Corrigé (revue du 18/10) / Fixed
+- **Repli sur la taille réelle si quota nul** : lorsque Drive API renvoie `quotaBytesUsed = "0"` (fichiers exemptés de quota, anciennes photos « haute qualité », stockage partagé), le calcul se replie automatiquement sur la taille réelle (`size`) au lieu de ramener le poids à 0 Mo et d'écarter le fichier.
+- **Paramètre IGNORER_CONSULTATION** : nouveau paramètre dans `Configuration` permettant, si réglé sur `OUI`, de juger de la dormance uniquement sur la date de modification (`modifiedTime`), sans être bloqué par des consultations ou prévisualisations (`viewedByMeTime`).
+- **Support des virgules décimales** : saisie fluide des seuils décimaux (ex. `0,1` ou `0.1` Mo) sans risque de rejet `NaN`.
+- **Diagnostic quantifié des rejets** : ventilation chiffrée précise de chaque motif d'exclusion affichée dans la boîte de dialogue en fin d'audit si 0 fichier nouveau n'est retenu.
 - **Limite des 6 minutes** : cache unique des métadonnées de dossiers (`construireCacheDossiers_`, un seul appel Drive par dossier au lieu de trois), dossier parent résolu uniquement pour les fichiers retenus, pages de 200 fichiers et garde-fou intra-page (`DUREE_LIMITE_PAGE_MS`) : une page trop longue est abandonnée puis rejouée à la reprise, sans perte ni doublon.
 - **Séparateur de formule par locale** : adaptation dynamique du séparateur de paramètres pour les formules injectées (`=HYPERLINK`) via `obtenirSeparateurFormule_()` (point-virgule pour les locales européennes `fr_FR`, virgule pour `en_US`), empêchant les erreurs d'analyse de formule Sheets.
-- **Diagnostic et guidage si aucun fichier retenu** : affichage d'une boîte de dialogue explicative avec astuces de paramétrage (seuils d'inactivité et de taille) si l'audit se termine avec 0 fichier éligible.
 - **Réinitialisation des jetons et verrous orphelins** : purge automatique de `VERROU_AUDIT`, `JETON_PAGE_DRIVE` et `DATE_LIMITE_AUDIT` lors d'une réinitialisation manuelle depuis le menu.
 - **Vérificateur des dossiers à la corbeille retiré** : redondant avec la requête `trashed = false` (Drive marque aussi `trashed` les fichiers d'un dossier mis à la corbeille) et coûteux en appels.
 - **Synchronisation de la corbeille** : écriture sous verrou de script ; retirée de `mettreAJourTableauDeBord` (qui n'interroge plus Drive à chaque action de la console).
 - **Migration de l'inventaire fiabilisée** : reconnaissance exacte de l'ancien format, et contrôle du format (`verifierSchemaInventaire_`) avant toute lecture ou écriture — un onglet non migré bloque avec un message explicite au lieu de lire les statuts dans la mauvaise colonne.
 - **Console** : un fichier déjà dans l'état visé est classé « déjà fait » (sorti de la liste, non compté dans les gains) ; « Garder » sur un fichier à la corbeille est refusé.
 - **Noms de fichiers interprétés comme formules** : un nom commençant par `=`, `+`, `-` ou `@` est neutralisé (`protegerTexteCellule_`).
-- Tests : 20 tests (mise à jour de `test_CA10_formuleDossierParent`, `test_CA11_protectionNomCommeFormule` et `test_CA11_schemaInventaireControle`).
+- Tests : 22 tests (ajout de `test_CA02_quotaZeroUtiliseTailleFichier` et `test_CA02_ignorerConsultation`).
 
 ---
 
