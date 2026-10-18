@@ -50,6 +50,14 @@ function actionMenuAudit() {
     const suite = resultat.reprisePlanifiee ? ' | Suite planifiée automatiquement' : ' | Audit terminé';
     const message = `Scannés : ${resultat.fichiersScannes} | Nouveaux dormants : ${resultat.fichiersRetenus}${suite}`;
     SpreadsheetApp.getActiveSpreadsheet().toast(message, '🌱 Audit Drive', 8);
+
+    if (resultat.fichiersRetenus === 0 && !resultat.reprisePlanifiee) {
+      const config = lireConfiguration();
+      const explication = resultat.fichiersScannes === 0
+        ? `L'audit n'a trouvé aucun fichier modifié avant la date limite (seuil actuel : ${config.SEUIL_INACTIVITE_MOIS} mois), ou aucun fichier ne vous appartient directement ('me' in owners).\n\n💡 Conseil : Vous pouvez réduire temporairement le paramètre « SEUIL_INACTIVITE_MOIS » (ex. 1 ou 3 mois) dans la feuille « Configuration » pour tester avec des fichiers plus récents.`
+        : `${resultat.fichiersScannes} fichier(s) ont été examinés, mais aucun ne remplit les critères de sommeil (soit consultés récemment, soit taille < ${config.TAILLE_MIN_MO} Mo, soit protégés en Liste_Blanche).\n\n💡 Conseil : Réduisez « SEUIL_INACTIVITE_MOIS » ou « TAILLE_MIN_MO » (ex. 0.1 Mo) dans la feuille « Configuration » puis relancez l'audit.`;
+      SpreadsheetApp.getUi().alert('🌱 Résultat de l\'audit Drive', explication, SpreadsheetApp.getUi().ButtonSet.OK);
+    }
   } catch (erreur) {
     console.error('Erreur actionMenuAudit :', erreur);
     SpreadsheetApp.getUi().alert('🌱 Erreur lors de l\'audit Drive', erreur.message, SpreadsheetApp.getUi().ButtonSet.OK);

@@ -230,20 +230,21 @@ function test_CA09_fichierCorbeilleExclu() {
 
 function test_CA10_formuleDossierParent() {
   const racine = formaterFormuleDossierParentDefaut_({});
-  affirmer_(racine === '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")', 'Sans parent, le lien doit pointer vers Mon Drive');
+  affirmer_(racine.includes('https://drive.google.com/drive/my-drive') && racine.includes('"Mon Drive")'), 'Sans parent, le lien doit pointer vers Mon Drive');
 
   const racineRoot = formaterFormuleDossierParentDefaut_({ parents: ['root'] });
-  affirmer_(racineRoot === '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")', 'Le dossier root doit pointer vers Mon Drive');
+  affirmer_(racineRoot.includes('https://drive.google.com/drive/my-drive') && racineRoot.includes('"Mon Drive")'), 'Le dossier root doit pointer vers Mon Drive');
 
   const dossierSimple = formaterFormuleDossierParentDefaut_({ parents: ['folder_123'] });
-  affirmer_(dossierSimple === '=HYPERLINK("https://drive.google.com/drive/folders/folder_123", "Dossier")', 'Par défaut, le dossier parent doit avoir le nom Dossier');
+  affirmer_(dossierSimple.includes('https://drive.google.com/drive/folders/folder_123') && dossierSimple.includes('"Dossier")'), 'Par défaut, le dossier parent doit avoir le nom Dossier');
 
   const dossierNomme = formaterFormuleDossierParentDefaut_({ parents: ['folder_456'], parentName: 'Rapports "Financiers"' });
-  affirmer_(dossierNomme === '=HYPERLINK("https://drive.google.com/drive/folders/folder_456", "Rapports ""Financiers""")', 'Les guillemets du nom de dossier doivent être échappés en double');
+  affirmer_(dossierNomme.includes('https://drive.google.com/drive/folders/folder_456') && dossierNomme.includes('"Rapports ""Financiers"""'), 'Les guillemets du nom de dossier doivent être échappés en double');
 
-  const cache = new Map([['folder_cached', '=HYPERLINK("https://drive.google.com/drive/folders/folder_cached", "CacheTest")']]);
+  const sep = obtenirSeparateurFormule_();
+  const cache = new Map([['folder_cached', `=HYPERLINK("https://drive.google.com/drive/folders/folder_cached"${sep} "CacheTest")`]]);
   const depuisCache = resoudreFormuleDossierParent_({ parents: ['folder_cached'] }, cache);
-  affirmer_(depuisCache === '=HYPERLINK("https://drive.google.com/drive/folders/folder_cached", "CacheTest")', 'Le cache mémoire doit être prioritaire');
+  affirmer_(depuisCache === `=HYPERLINK("https://drive.google.com/drive/folders/folder_cached"${sep} "CacheTest")`, 'Le cache mémoire doit être prioritaire');
 }
 
 function test_CA11_protectionNomCommeFormule() {

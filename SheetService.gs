@@ -27,6 +27,9 @@ function initialiserEnvironnement(options = {}) {
   initialiserFeuilleTableauDeBord_(classeur);
 
   if (depuisMenu) {
+    props.deleteProperty(CLES_PROPRIETES.VERROU_AUDIT);
+    props.deleteProperty(CLES_PROPRIETES.JETON_PAGE_DRIVE);
+    props.deleteProperty(CLES_PROPRIETES.DATE_LIMITE_AUDIT);
     supprimerFeuilleInitialeSiVierge_(classeur);
     mettreAJourTableauDeBord();
     const feuilleTdb = classeur.getSheetByName(NOMS_FEUILLES.TABLEAU_DE_BORD);

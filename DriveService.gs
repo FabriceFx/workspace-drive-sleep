@@ -96,21 +96,38 @@ function evaluerEligibiliteFichier_(fichier, config, dateLimite, idsExclus, cont
 }
 
 /**
+ * Détermine le séparateur d'arguments pour les formules Google Sheets (=HYPERLINK)
+ * selon la locale du classeur maître (point-virgule en France/Europe, virgule en US/UK).
+ * @returns {string} ';' ou ','
+ */
+function obtenirSeparateurFormule_() {
+  try {
+    const classeur = obtenirClasseurMaitre_();
+    const locale = (classeur && classeur.getSpreadsheetLocale ? classeur.getSpreadsheetLocale() : 'fr').toLowerCase();
+    const paysVirgule = ['en_us', 'en_gb', 'en_ca', 'en_au', 'ja_jp', 'zh_cn'];
+    return paysVirgule.some((l) => locale.startsWith(l.slice(0, 2))) ? ',' : ';';
+  } catch (erreur) {
+    return ';';
+  }
+}
+
+/**
  * Formate une formule de repli vers le dossier parent sans appel d'API (ou pour tests).
  * @param {Object} fichier Objet fichier.
  * @returns {string} Formule =HYPERLINK("...", "...").
  */
 function formaterFormuleDossierParentDefaut_(fichier) {
+  const sep = obtenirSeparateurFormule_();
   if (!fichier || !Array.isArray(fichier.parents) || fichier.parents.length === 0) {
-    return '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")';
+    return `=HYPERLINK("https://drive.google.com/drive/my-drive"${sep} "Mon Drive")`;
   }
   const idParent = String(fichier.parents[0]).trim();
   if (!idParent || idParent === 'root') {
-    return '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")';
+    return `=HYPERLINK("https://drive.google.com/drive/my-drive"${sep} "Mon Drive")`;
   }
   const nom = (fichier.parentName ? String(fichier.parentName).trim() : 'Dossier').replace(/"/g, () => '""');
   const url = `https://drive.google.com/drive/folders/${idParent}`.replace(/"/g, () => '""');
-  return `=HYPERLINK("${url}", "${nom}")`;
+  return `=HYPERLINK("${url}"${sep} "${nom}")`;
 }
 
 /**
@@ -122,12 +139,13 @@ function formaterFormuleDossierParentDefaut_(fichier) {
  * @returns {string} Formule =HYPERLINK("...", "...").
  */
 function resoudreFormuleDossierParent_(fichier, cache, cacheDossiers) {
+  const sep = obtenirSeparateurFormule_();
   if (!fichier || !Array.isArray(fichier.parents) || fichier.parents.length === 0) {
-    return '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")';
+    return `=HYPERLINK("https://drive.google.com/drive/my-drive"${sep} "Mon Drive")`;
   }
   const idParent = String(fichier.parents[0]).trim();
   if (!idParent || idParent === 'root') {
-    return '=HYPERLINK("https://drive.google.com/drive/my-drive", "Mon Drive")';
+    return `=HYPERLINK("https://drive.google.com/drive/my-drive"${sep} "Mon Drive")`;
   }
   if (cache && cache.has(idParent)) {
     return cache.get(idParent);
@@ -143,7 +161,7 @@ function resoudreFormuleDossierParent_(fichier, cache, cacheDossiers) {
 
   const nomEchappe = nom.replace(/"/g, () => '""');
   const urlEchappee = url.replace(/"/g, () => '""');
-  const formule = `=HYPERLINK("${urlEchappee}", "${nomEchappe}")`;
+  const formule = `=HYPERLINK("${urlEchappee}"${sep} "${nomEchappe}")`;
 
   if (cache) {
     cache.set(idParent, formule);
